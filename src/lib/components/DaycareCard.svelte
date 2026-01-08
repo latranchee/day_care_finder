@@ -1,18 +1,10 @@
 <script lang="ts">
-	import type { Daycare, Review, Contact } from '$lib/types';
+	import type { Daycare, Review, Contact, CardSettings } from '$lib/types';
 	import * as m from '$lib/paraglide/messages.js';
-
-	interface CardSettings {
-		showAddress: boolean;
-		showPhone: boolean;
-		showEmail: boolean;
-		showPrice: boolean;
-		showAgeRange: boolean;
-		showFacebook: boolean;
-		showContacts: boolean;
-		showReview: boolean;
-		showCommuteTime: boolean;
-	}
+	import PhoneIcon from './icons/PhoneIcon.svelte';
+	import EmailIcon from './icons/EmailIcon.svelte';
+	import FacebookIcon from './icons/FacebookIcon.svelte';
+	import { formatRating, truncateText } from '$lib/utils/formatting';
 
 	interface Props {
 		daycare: Daycare;
@@ -25,16 +17,6 @@
 	}
 
 	let { daycare, firstReview = null, primaryContact = null, contactCount = 0, cardSettings, onSelect, onHide }: Props = $props();
-
-	function formatRating(rating: number | null): string {
-		if (rating === null) return '—';
-		return '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
-	}
-
-	function truncateText(text: string, maxLength: number = 80): string {
-		if (text.length <= maxLength) return text;
-		return text.slice(0, maxLength).trim() + '...';
-	}
 
 	function handleHide(e: MouseEvent) {
 		e.stopPropagation();
@@ -102,9 +84,7 @@
 				class="meta-tag phone"
 				onclick={(e) => e.stopPropagation()}
 			>
-				<svg class="phone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-				</svg>
+				<PhoneIcon class="phone-icon" size={12} />
 				{daycare.phone}
 			</a>
 		{/if}
@@ -114,10 +94,7 @@
 				class="meta-tag email"
 				onclick={(e) => e.stopPropagation()}
 			>
-				<svg class="email-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-					<polyline points="22,6 12,13 2,6"/>
-				</svg>
+				<EmailIcon class="email-icon" size={12} />
 				{daycare.email}
 			</a>
 		{/if}
@@ -130,9 +107,7 @@
 				title={m.view_facebook()}
 				onclick={(e) => e.stopPropagation()}
 			>
-				<svg class="facebook-icon" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-				</svg>
+				<FacebookIcon class="facebook-icon" size={12} />
 			</a>
 		{/if}
 		{#if cardSettings.showContacts && contactCount > 0}
@@ -150,13 +125,30 @@
 			</span>
 		{/if}
 		{#if cardSettings.showCommuteTime && daycare.commute_minutes !== null}
-			<span class="meta-tag commute" title="Commute time from home">
-				<svg class="commute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<circle cx="12" cy="12" r="10"/>
-					<polyline points="12 6 12 12 16 14"/>
-				</svg>
-				{daycare.commute_minutes} min
-			</span>
+			{#if daycare.commute_maps_url}
+				<a
+					href={daycare.commute_maps_url}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="meta-tag commute commute-link"
+					title="Open directions in Google Maps"
+					onclick={(e) => e.stopPropagation()}
+				>
+					<svg class="commute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10"/>
+						<polyline points="12 6 12 12 16 14"/>
+					</svg>
+					{daycare.commute_minutes} min
+				</a>
+			{:else}
+				<span class="meta-tag commute" title="Commute time from home">
+					<svg class="commute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10"/>
+						<polyline points="12 6 12 12 16 14"/>
+					</svg>
+					{daycare.commute_minutes} min
+				</span>
+			{/if}
 		{/if}
 	</div>
 
@@ -257,6 +249,11 @@
 		color: var(--accent-warm);
 		letter-spacing: -1px;
 		flex-shrink: 0;
+		transition: opacity 0.15s ease;
+	}
+
+	.daycare-card:hover .card-rating {
+		opacity: 0;
 	}
 
 	.card-address {
@@ -314,12 +311,6 @@
 		background: #d8e8d8;
 	}
 
-	.phone-icon {
-		width: 12px;
-		height: 12px;
-		flex-shrink: 0;
-	}
-
 	.meta-tag.email {
 		background: #e8eaf0;
 		color: #4a5a6a;
@@ -333,12 +324,6 @@
 		background: #d8dae8;
 	}
 
-	.email-icon {
-		width: 12px;
-		height: 12px;
-		flex-shrink: 0;
-	}
-
 	.meta-tag.facebook {
 		background: #e8eaf4;
 		color: #1877f2;
@@ -350,11 +335,6 @@
 
 	.meta-tag.facebook:hover {
 		background: #d0d8f0;
-	}
-
-	.facebook-icon {
-		width: 12px;
-		height: 12px;
 	}
 
 	.meta-tag.contacts {
@@ -376,6 +356,16 @@
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
+	}
+
+	.meta-tag.commute-link {
+		text-decoration: none;
+		cursor: pointer;
+		transition: background-color 0.15s ease;
+	}
+
+	.meta-tag.commute-link:hover {
+		background: #e0d4ea;
 	}
 
 	.commute-icon {

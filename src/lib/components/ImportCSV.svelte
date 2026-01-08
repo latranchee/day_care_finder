@@ -62,7 +62,7 @@
 	}
 </script>
 
-<div class="import-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()} role="presentation">
+<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()} role="presentation">
 	<div class="import-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
 		<button class="modal-close" onclick={onClose} aria-label={m.close()}>
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -126,31 +126,9 @@ Happy Kids,123 Main St,555-1234,https://facebook.com/happykids,https://example.c
 </div>
 
 <style>
-	.import-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(45, 35, 25, 0.5);
-		backdrop-filter: blur(4px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1rem;
-		z-index: 100;
-		animation: fadeIn 0.2s ease-out;
-	}
-
-	@keyframes fadeIn {
-		from { opacity: 0; }
-		to { opacity: 1; }
-	}
+	/* Base modal-backdrop, modal-close from shared.css */
 
 	.import-modal {
-		--modal-bg: #fffcf8;
-		--border-color: #e8dfd3;
-		--text-primary: #3d3425;
-		--text-secondary: #7a6d5c;
-		--accent: #c47a4e;
-
 		background: var(--modal-bg);
 		border-radius: 20px;
 		padding: 2rem;
@@ -159,42 +137,6 @@ Happy Kids,123 Main St,555-1234,https://facebook.com/happykids,https://example.c
 		position: relative;
 		box-shadow: 0 20px 40px rgba(45, 35, 25, 0.15);
 		animation: slideUp 0.3s ease-out;
-	}
-
-	@keyframes slideUp {
-		from {
-			opacity: 0;
-			transform: translateY(20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.modal-close {
-		position: absolute;
-		top: 1rem;
-		right: 1rem;
-		width: 36px;
-		height: 36px;
-		border: none;
-		background: transparent;
-		cursor: pointer;
-		color: var(--text-secondary);
-		border-radius: 8px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.modal-close:hover {
-		background: rgba(0,0,0,0.05);
-	}
-
-	.modal-close svg {
-		width: 20px;
-		height: 20px;
 	}
 
 	.import-title {
@@ -236,7 +178,8 @@ Happy Kids,123 Main St,555-1234,https://facebook.com/happykids,https://example.c
 		width: 48px;
 		height: 48px;
 		color: var(--text-secondary);
-		margin-bottom: 0.75rem;
+		display: block;
+		margin: 0 auto 0.75rem;
 	}
 
 	.drop-text {

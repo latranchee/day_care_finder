@@ -1,21 +1,7 @@
 <script lang="ts">
 	import { dndzone } from 'svelte-dnd-action';
-	import type { Daycare, Review, Contact, Stage } from '$lib/types';
+	import type { Daycare, Stage, DaycareWithExtras, CardSettings } from '$lib/types';
 	import DaycareCard from './DaycareCard.svelte';
-
-	type DaycareWithExtras = Daycare & { firstReview?: Review; primaryContact?: Contact; contactCount: number };
-
-	interface CardSettings {
-		showAddress: boolean;
-		showPhone: boolean;
-		showEmail: boolean;
-		showPrice: boolean;
-		showAgeRange: boolean;
-		showFacebook: boolean;
-		showContacts: boolean;
-		showReview: boolean;
-		showCommuteTime: boolean;
-	}
 
 	interface Props {
 		stage: { id: Stage; label: string };

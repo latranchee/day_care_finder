@@ -1,9 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { getAllDaycares, getFirstReviewByDaycareId, getPrimaryContactByDaycareId, getContactCountByDaycareId } from '$lib/server/db';
-import type { Daycare, Review, Contact, Stage } from '$lib/types';
+import type { Stage, DaycareWithExtras } from '$lib/types';
 import { STAGES } from '$lib/types';
-
-export type DaycareWithExtras = Daycare & { firstReview?: Review; primaryContact?: Contact; contactCount: number };
 
 export const load: PageServerLoad = async () => {
 	const daycares = getAllDaycares();

@@ -1,27 +1,17 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDaycareById, updateDaycare, deleteDaycare, moveDaycare } from '$lib/server/db';
+import { updateDaycare, deleteDaycare, moveDaycare } from '$lib/server/db';
+import { parseIdParam, requireDaycare } from '$lib/server/validation';
 import type { DaycareInput, Stage } from '$lib/types';
 
 export const GET: RequestHandler = async ({ params }) => {
-	const id = parseInt(params.id);
-	if (isNaN(id)) {
-		throw error(400, 'Invalid ID');
-	}
-
-	const daycare = getDaycareById(id);
-	if (!daycare) {
-		throw error(404, 'Daycare not found');
-	}
-
+	const id = parseIdParam(params);
+	const daycare = requireDaycare(id);
 	return json(daycare);
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
-	const id = parseInt(params.id);
-	if (isNaN(id)) {
-		throw error(400, 'Invalid ID');
-	}
+	const id = parseIdParam(params);
 
 	const body = await request.json();
 
@@ -45,10 +35,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 };
 
 export const DELETE: RequestHandler = async ({ params }) => {
-	const id = parseInt(params.id);
-	if (isNaN(id)) {
-		throw error(400, 'Invalid ID');
-	}
+	const id = parseIdParam(params);
 
 	const success = deleteDaycare(id);
 	if (!success) {

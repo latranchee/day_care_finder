@@ -3,6 +3,10 @@
 	import Markdown from './Markdown.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime.js';
+	import PhoneIcon from './icons/PhoneIcon.svelte';
+	import EmailIcon from './icons/EmailIcon.svelte';
+	import FacebookIcon from './icons/FacebookIcon.svelte';
+	import { formatDate as formatDateUtil, truncateText } from '$lib/utils/formatting';
 
 	interface Props {
 		daycare: Daycare | null;
@@ -252,13 +256,8 @@
 	}
 
 	function formatDate(dateStr: string): string {
-		const locale = getLocale() === 'fr' ? 'fr-CA' : 'en-US';
-		return new Date(dateStr).toLocaleDateString(locale, {
-			month: 'short',
-			day: 'numeric',
-			hour: 'numeric',
-			minute: '2-digit'
-		});
+		const locale = getLocale() === 'fr' ? 'fr' : 'en';
+		return formatDateUtil(dateStr, locale);
 	}
 
 	const NOTE_MAX_LENGTH = 150;
@@ -268,8 +267,7 @@
 	}
 
 	function truncateNote(content: string): string {
-		if (content.length <= NOTE_MAX_LENGTH) return content;
-		return content.slice(0, NOTE_MAX_LENGTH).trim() + '...';
+		return truncateText(content, NOTE_MAX_LENGTH);
 	}
 
 	function toggleNoteExpanded(noteId: number) {
@@ -376,17 +374,12 @@
 									<div class="quick-links">
 										{#if daycare.phone}
 											<a href="tel:{daycare.phone}" class="quick-link" title={daycare.phone}>
-												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-													<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-												</svg>
+												<PhoneIcon size={20} />
 											</a>
 										{/if}
 										{#if daycare.email}
 											<a href="mailto:{daycare.email}" class="quick-link" title={daycare.email}>
-												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-													<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-													<polyline points="22,6 12,13 2,6"/>
-												</svg>
+												<EmailIcon size={20} />
 											</a>
 										{/if}
 										{#if daycare.website}
@@ -400,9 +393,7 @@
 										{/if}
 										{#if daycare.facebook}
 											<a href={daycare.facebook} target="_blank" rel="noopener" class="quick-link" title="Facebook">
-												<svg viewBox="0 0 24 24" fill="currentColor">
-													<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
-												</svg>
+												<FacebookIcon size={20} />
 											</a>
 										{/if}
 									</div>
@@ -441,6 +432,26 @@
 										<div class="info-item">
 											<span class="info-label">{m.label_ages()}</span>
 											<span class="info-value">{daycare.age_range}</span>
+										</div>
+									{/if}
+
+									{#if daycare.commute_minutes !== null}
+										<div class="info-item">
+											<span class="info-label">{m.label_commute()}</span>
+											<span class="info-value">
+												{#if daycare.commute_maps_url}
+													<a href={daycare.commute_maps_url} target="_blank" rel="noopener noreferrer" class="commute-link">
+														{daycare.commute_minutes} min
+														<svg class="external-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+															<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+															<polyline points="15 3 21 3 21 9"/>
+															<line x1="10" y1="14" x2="21" y2="3"/>
+														</svg>
+													</a>
+												{:else}
+													{daycare.commute_minutes} min
+												{/if}
+											</span>
 										</div>
 									{/if}
 								</div>
@@ -671,18 +682,13 @@
 										<div class="contact-details">
 											{#if contact.phone}
 												<a href="tel:{contact.phone}" class="contact-info">
-													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="contact-icon">
-														<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-													</svg>
+													<PhoneIcon class="contact-icon" size={14} />
 													{contact.phone}
 												</a>
 											{/if}
 											{#if contact.email}
 												<a href="mailto:{contact.email}" class="contact-info">
-													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="contact-icon">
-														<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-														<polyline points="22,6 12,13 2,6"/>
-													</svg>
+													<EmailIcon class="contact-icon" size={14} />
 													{contact.email}
 												</a>
 											{/if}
@@ -810,31 +816,8 @@
 {/if}
 
 <style>
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(45, 35, 25, 0.5);
-		backdrop-filter: blur(4px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1rem;
-		z-index: 100;
-		animation: fadeIn 0.2s ease-out;
-	}
-
-	@keyframes fadeIn {
-		from { opacity: 0; }
-		to { opacity: 1; }
-	}
-
+	/* Modal-specific layout styles - base modal/button/form styles from shared.css */
 	.modal {
-		--modal-bg: #fffcf8;
-		--border-color: #e8dfd3;
-		--text-primary: #3d3425;
-		--text-secondary: #7a6d5c;
-		--accent: #c47a4e;
-
 		background: var(--modal-bg);
 		border-radius: 20px;
 		box-shadow:
@@ -846,45 +829,6 @@
 		overflow: hidden;
 		position: relative;
 		animation: slideUp 0.3s ease-out;
-	}
-
-	@keyframes slideUp {
-		from {
-			opacity: 0;
-			transform: translateY(20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.modal-close {
-		position: absolute;
-		top: 1rem;
-		right: 1rem;
-		width: 36px;
-		height: 36px;
-		border: none;
-		background: transparent;
-		cursor: pointer;
-		color: var(--text-secondary);
-		border-radius: 8px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.15s ease;
-		z-index: 10;
-	}
-
-	.modal-close:hover {
-		background: rgba(0,0,0,0.05);
-		color: var(--text-primary);
-	}
-
-	.modal-close svg {
-		width: 20px;
-		height: 20px;
 	}
 
 	.modal-content {
@@ -1008,6 +952,26 @@
 		color: var(--text-primary);
 	}
 
+	.info-value .commute-link {
+		color: #6a4a7a;
+		text-decoration: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.125rem 0.5rem;
+		background: #f0e8f4;
+		border-radius: 4px;
+		transition: background-color 0.15s ease;
+	}
+
+	.info-value .commute-link:hover {
+		background: #e0d4ea;
+	}
+
+	.info-value .commute-link .external-icon {
+		opacity: 0.7;
+	}
+
 	.detail-actions {
 		display: flex;
 		gap: 0.75rem;
@@ -1016,50 +980,11 @@
 		margin-top: auto;
 	}
 
-	/* Edit Form */
+	/* Edit Form - form-group, form-row, form-actions from shared.css */
 	.edit-form {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-	}
-
-	.form-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-
-	.form-group label {
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: var(--text-secondary);
-	}
-
-	.form-group input {
-		padding: 0.625rem 0.875rem;
-		border: 1px solid var(--border-color);
-		border-radius: 8px;
-		font-size: 0.95rem;
-		background: white;
-		color: var(--text-primary);
-		transition: border-color 0.15s ease;
-	}
-
-	.form-group input:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	.form-actions {
-		display: flex;
-		gap: 0.75rem;
-		margin-top: 0.5rem;
 	}
 
 	/* Notes */
@@ -1211,53 +1136,7 @@
 		margin-bottom: 1rem;
 	}
 
-	/* Buttons */
-	.btn {
-		padding: 0.625rem 1.25rem;
-		border: none;
-		border-radius: 8px;
-		font-size: 0.9rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.btn-sm {
-		padding: 0.5rem 1rem;
-		font-size: 0.85rem;
-	}
-
-	.btn-primary {
-		background: var(--accent);
-		color: white;
-	}
-
-	.btn-primary:hover {
-		background: #b36a42;
-	}
-
-	.btn-primary:disabled {
-		background: #ccc;
-		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		background: #f0ebe4;
-		color: var(--text-primary);
-	}
-
-	.btn-secondary:hover {
-		background: #e8e2d9;
-	}
-
-	.btn-danger {
-		background: #fae8e8;
-		color: #a04444;
-	}
-
-	.btn-danger:hover {
-		background: #f5d5d5;
-	}
+	/* Button styles from shared.css */
 
 	/* Reviews */
 	.section-divider {
@@ -1569,12 +1448,6 @@
 		text-decoration: underline;
 	}
 
-	.contact-icon {
-		width: 14px;
-		height: 14px;
-		flex-shrink: 0;
-	}
-
 	.contact-notes {
 		font-size: 0.8rem;
 		color: var(--text-secondary);
@@ -1675,10 +1548,6 @@
 			width: 100%;
 			border-left: none;
 			border-top: 1px solid var(--border-color);
-		}
-
-		.form-row {
-			grid-template-columns: 1fr;
 		}
 	}
 </style>

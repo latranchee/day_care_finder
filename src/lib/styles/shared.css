@@ -1,0 +1,195 @@
+/* Shared CSS Variables */
+:root {
+	--modal-bg: #fffcf8;
+	--border-color: #e8dfd3;
+	--text-primary: #3d3425;
+	--text-secondary: #7a6d5c;
+	--accent: #c47a4e;
+	--accent-hover: #b36a42;
+	--danger-bg: #fae8e8;
+	--danger-color: #a04444;
+	--danger-hover: #f5d5d5;
+}
+
+/* =============================================
+   Modal Backdrop/Overlay
+   Used in: DaycareModal, AddDaycare, ImportCSV
+   ============================================= */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(45, 35, 25, 0.5);
+	backdrop-filter: blur(4px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+	z-index: 100;
+	animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+@keyframes slideUp {
+	from {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.modal-close {
+	position: absolute;
+	top: 1rem;
+	right: 1rem;
+	width: 36px;
+	height: 36px;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	color: var(--text-secondary);
+	border-radius: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.15s ease;
+	z-index: 10;
+}
+
+.modal-close:hover {
+	background: rgba(0, 0, 0, 0.05);
+	color: var(--text-primary);
+}
+
+.modal-close svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* =============================================
+   Button Variants
+   Used in: DaycareModal, AddDaycare, +page.svelte
+   ============================================= */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.625rem 1.25rem;
+	border: none;
+	border-radius: 8px;
+	font-size: 0.9rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.btn-sm {
+	padding: 0.5rem 1rem;
+	font-size: 0.85rem;
+}
+
+.btn-primary {
+	background: var(--accent);
+	color: white;
+}
+
+.btn-primary:hover {
+	background: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+	background: #ccc;
+	cursor: not-allowed;
+}
+
+.btn-secondary {
+	background: #f0ebe4;
+	color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+	background: #e8e2d9;
+}
+
+.btn-secondary.active {
+	background: #d8cfc4;
+	color: var(--text-primary);
+}
+
+.btn-danger {
+	background: var(--danger-bg);
+	color: var(--danger-color);
+}
+
+.btn-danger:hover {
+	background: var(--danger-hover);
+}
+
+.btn-icon {
+	width: 18px;
+	height: 18px;
+}
+
+/* =============================================
+   Form Group Patterns
+   Used in: DaycareModal, AddDaycare
+   ============================================= */
+.form-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0.375rem;
+}
+
+.form-group label {
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+	padding: 0.625rem 0.875rem;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	font-size: 0.95rem;
+	background: white;
+	color: var(--text-primary);
+	transition: border-color 0.15s ease;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+	color: #bbb;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+.form-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1rem;
+}
+
+.form-actions {
+	display: flex;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
+}
+
+@media (max-width: 480px) {
+	.form-row {
+		grid-template-columns: 1fr;
+	}
+}

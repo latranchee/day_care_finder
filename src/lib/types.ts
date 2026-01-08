@@ -17,6 +17,7 @@ export interface Daycare {
 	commute_minutes: number | null;
 	commute_origin: string;
 	commute_destination: string;
+	commute_maps_url: string;
 	commute_calculated_at: string | null;
 	created_at: string;
 	updated_at: string;
@@ -105,4 +106,24 @@ export interface DaycareInput {
 	rating?: number | null;
 	stage?: Stage;
 	hidden?: boolean;
+}
+
+// Extended daycare type with related data for display
+export type DaycareWithExtras = Daycare & {
+	firstReview?: Review;
+	primaryContact?: Contact;
+	contactCount: number;
+};
+
+// Card display settings for controlling what fields are shown on daycare cards
+export interface CardSettings {
+	showAddress: boolean;
+	showPhone: boolean;
+	showEmail: boolean;
+	showPrice: boolean;
+	showAgeRange: boolean;
+	showFacebook: boolean;
+	showContacts: boolean;
+	showReview: boolean;
+	showCommuteTime: boolean;
 }

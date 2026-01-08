@@ -30,7 +30,7 @@
 	}
 </script>
 
-<div class="add-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()} role="presentation">
+<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()} role="presentation">
 	<div class="add-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
 		<button class="modal-close" onclick={onClose} aria-label={m.close()}>
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -103,75 +103,17 @@
 </div>
 
 <style>
-	.add-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(45, 35, 25, 0.5);
-		backdrop-filter: blur(4px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1rem;
-		z-index: 100;
-		animation: fadeIn 0.2s ease-out;
-	}
-
-	@keyframes fadeIn {
-		from { opacity: 0; }
-		to { opacity: 1; }
-	}
+	/* Base modal-backdrop, modal-close, btn, form-group, form-row, form-actions from shared.css */
 
 	.add-modal {
-		--modal-bg: #fffcf8;
-		--border-color: #e8dfd3;
-		--text-primary: #3d3425;
-		--text-secondary: #7a6d5c;
-		--accent: #c47a4e;
-
 		background: var(--modal-bg);
 		border-radius: 20px;
 		padding: 2rem;
 		width: 100%;
-		max-width: 480px;
+		max-width: 560px;
 		position: relative;
 		box-shadow: 0 20px 40px rgba(45, 35, 25, 0.15);
 		animation: slideUp 0.3s ease-out;
-	}
-
-	@keyframes slideUp {
-		from {
-			opacity: 0;
-			transform: translateY(20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.modal-close {
-		position: absolute;
-		top: 1rem;
-		right: 1rem;
-		width: 36px;
-		height: 36px;
-		border: none;
-		background: transparent;
-		cursor: pointer;
-		color: var(--text-secondary);
-		border-radius: 8px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.modal-close:hover {
-		background: rgba(0,0,0,0.05);
-	}
-
-	.modal-close svg {
-		width: 20px;
-		height: 20px;
 	}
 
 	.add-title {
@@ -188,85 +130,9 @@
 		gap: 1rem;
 	}
 
-	.form-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-
-	.form-group label {
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: var(--text-secondary);
-	}
-
-	.form-group input {
-		padding: 0.625rem 0.875rem;
-		border: 1px solid var(--border-color);
-		border-radius: 8px;
-		font-size: 0.95rem;
-		background: white;
-		color: var(--text-primary);
-		transition: border-color 0.15s ease;
-	}
-
-	.form-group input::placeholder {
-		color: #bbb;
-	}
-
-	.form-group input:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	.form-actions {
-		display: flex;
-		gap: 0.75rem;
-		margin-top: 0.5rem;
-	}
-
-	.btn {
-		padding: 0.625rem 1.25rem;
-		border: none;
-		border-radius: 8px;
-		font-size: 0.9rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.btn-primary {
-		background: var(--accent);
-		color: white;
-	}
-
-	.btn-primary:hover {
-		background: #b36a42;
-	}
-
-	.btn-primary:disabled {
-		background: #ccc;
-		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		background: #f0ebe4;
-		color: var(--text-primary);
-	}
-
-	.btn-secondary:hover {
-		background: #e8e2d9;
-	}
-
-	@media (max-width: 480px) {
-		.form-row {
-			grid-template-columns: 1fr;
-		}
+	/* Ensure inputs in this modal take full width */
+	.add-form :global(.form-group input) {
+		width: 100%;
+		box-sizing: border-box;
 	}
 </style>

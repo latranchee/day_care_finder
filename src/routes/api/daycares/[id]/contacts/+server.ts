@@ -1,41 +1,25 @@
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDaycareById, getContactsByDaycareId, createContact } from '$lib/server/db';
+import { getContactsByDaycareId, createContact } from '$lib/server/db';
+import { parseIdParam, requireDaycare, requireNonEmptyString } from '$lib/server/validation';
 
 export const GET: RequestHandler = async ({ params }) => {
-	const daycareId = parseInt(params.id);
-	if (isNaN(daycareId)) {
-		throw error(400, 'Invalid ID');
-	}
-
-	const daycare = getDaycareById(daycareId);
-	if (!daycare) {
-		throw error(404, 'Daycare not found');
-	}
+	const daycareId = parseIdParam(params);
+	requireDaycare(daycareId);
 
 	const contacts = getContactsByDaycareId(daycareId);
 	return json(contacts);
 };
 
 export const POST: RequestHandler = async ({ params, request }) => {
-	const daycareId = parseInt(params.id);
-	if (isNaN(daycareId)) {
-		throw error(400, 'Invalid ID');
-	}
-
-	const daycare = getDaycareById(daycareId);
-	if (!daycare) {
-		throw error(404, 'Daycare not found');
-	}
+	const daycareId = parseIdParam(params);
+	requireDaycare(daycareId);
 
 	const { name, role, phone, email, notes, is_primary } = await request.json();
-
-	if (!name || name.trim() === '') {
-		throw error(400, 'Contact name is required');
-	}
+	const trimmedName = requireNonEmptyString(name, 'Contact name');
 
 	const contact = createContact(daycareId, {
-		name: name.trim(),
+		name: trimmedName,
 		role: role?.trim() || '',
 		phone: phone?.trim() || '',
 		email: email?.trim() || '',

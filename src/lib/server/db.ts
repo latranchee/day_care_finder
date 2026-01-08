@@ -122,6 +122,11 @@ try {
 } catch {
 	// Column already exists, ignore error
 }
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN commute_maps_url TEXT DEFAULT ''`);
+} catch {
+	// Column already exists, ignore error
+}
 
 // Migration: Migrate existing phone/email from daycares to contacts table
 try {
@@ -518,7 +523,7 @@ export function getAllSettings(): Record<string, string> {
 export function getDaycaresNeedingCommute(homeAddress: string): Daycare[] {
 	return db.prepare(`
 		SELECT * FROM daycares
-		WHERE address IS NOT NULL AND address != ''
+		WHERE TRIM(address) IS NOT NULL AND TRIM(address) != ''
 		AND (
 			commute_origin IS NULL OR commute_origin = '' OR commute_origin != ?
 			OR commute_destination IS NULL OR commute_destination = '' OR commute_destination != address
@@ -531,15 +536,17 @@ export function updateDaycareCommute(
 	id: number,
 	commuteMinutes: number,
 	commuteOrigin: string,
-	commuteDestination: string
+	commuteDestination: string,
+	commuteMapsUrl: string
 ): void {
 	db.prepare(`
 		UPDATE daycares
 		SET commute_minutes = ?,
 			commute_origin = ?,
 			commute_destination = ?,
+			commute_maps_url = ?,
 			commute_calculated_at = CURRENT_TIMESTAMP,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`).run(commuteMinutes, commuteOrigin, commuteDestination, id);
+	`).run(commuteMinutes, commuteOrigin, commuteDestination, commuteMapsUrl, id);
 }

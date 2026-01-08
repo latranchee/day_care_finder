@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
-	import type { Daycare, DaycareInput, Review, Contact, Stage } from '$lib/types';
+	import type { Daycare, DaycareInput, Stage, DaycareWithExtras, CardSettings } from '$lib/types';
 	import KanbanColumn from '$lib/components/KanbanColumn.svelte';
 	import DaycareModal from '$lib/components/DaycareModal.svelte';
 	import ImportCSV from '$lib/components/ImportCSV.svelte';
@@ -26,7 +26,6 @@
 		return labels[stageId]();
 	}
 
-	type DaycareWithExtras = Daycare & { firstReview?: Review; primaryContact?: Contact; contactCount: number };
 
 	interface Props {
 		data: PageData;
@@ -48,13 +47,14 @@
 	let showAddDaycare = $state(false);
 	let showHidden = $state(false);
 	let showSettings = $state(false);
+	let settingsContainer: HTMLDivElement;
 	let saveError = $state<string | null>(null);
 	let homeAddress = $state('');
 	let isCalculatingCommutes = $state(false);
 	let commuteStatus = $state<string | null>(null);
 
 	// Card display settings - load from localStorage
-	const defaultCardSettings = {
+	const defaultCardSettings: CardSettings = {
 		showAddress: true,
 		showPhone: true,
 		showEmail: true,
@@ -282,19 +282,47 @@
 			await saveHomeAddress();
 
 			const res = await fetch('/api/commute', { method: 'POST' });
-			const result = await res.json();
 
-			if (res.ok) {
-				if (result.calculated > 0) {
-					commuteStatus = `Calculated ${result.calculated} commute${result.calculated > 1 ? 's' : ''}`;
-					invalidateAll();
-				} else if (result.errors?.length > 0) {
-					commuteStatus = `${result.errors.length} error(s) occurred`;
-				} else {
-					commuteStatus = 'All commutes are up to date';
+			if (!res.body) {
+				throw new Error('No response body');
+			}
+
+			const reader = res.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						const data = JSON.parse(line.slice(6));
+
+						if (data.error) {
+							commuteStatus = data.error;
+						} else if (data.type === 'start') {
+							if (data.total === 0) {
+								commuteStatus = 'All commutes are up to date';
+							}
+						} else if (data.type === 'progress') {
+							commuteStatus = `Calculating ${data.current} of ${data.total}: ${data.name}`;
+						} else if (data.type === 'done') {
+							if (data.calculated > 0) {
+								commuteStatus = `Calculated ${data.calculated} commute${data.calculated > 1 ? 's' : ''}`;
+								invalidateAll();
+							} else if (data.errors?.length > 0) {
+								commuteStatus = `${data.errors.length} error(s) occurred`;
+							} else {
+								commuteStatus = 'All commutes are up to date';
+							}
+						}
+					}
 				}
-			} else {
-				commuteStatus = result.error || 'Failed to calculate commutes';
 			}
 		} catch (err) {
 			commuteStatus = 'Failed to calculate commutes';
@@ -309,7 +337,16 @@
 	$effect(() => {
 		loadSettings();
 	});
+
+	// Close settings when clicking outside
+	function handleWindowClick(e: MouseEvent) {
+		if (showSettings && settingsContainer && !settingsContainer.contains(e.target as Node)) {
+			showSettings = false;
+		}
+	}
 </script>
+
+<svelte:window onclick={handleWindowClick} />
 
 <svelte:head>
 	<title>{m.app_title()}</title>
@@ -351,7 +388,7 @@
 					{showHidden ? m.btn_hide_hidden() : m.btn_show_hidden({ count: hiddenCount })}
 				</button>
 			{/if}
-			<div class="settings-container">
+			<div class="settings-container" bind:this={settingsContainer}>
 				<button
 					class="btn btn-icon-only"
 					class:active={showSettings}
@@ -607,46 +644,20 @@
 		gap: 0.75rem;
 	}
 
+	/* Base btn, btn-primary, btn-secondary from shared.css */
+
+	/* Page-specific button overrides */
 	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.625rem 1rem;
-		border: none;
 		border-radius: 10px;
-		font-size: 0.9rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.btn-icon {
-		width: 18px;
-		height: 18px;
-	}
-
-	.btn-primary {
-		background: #c47a4e;
-		color: white;
+		padding: 0.625rem 1rem;
 	}
 
 	.btn-primary:hover {
-		background: #b36a42;
 		transform: translateY(-1px);
 	}
 
 	.btn-secondary {
-		background: #f0ebe4;
 		color: #5a4d3d;
-	}
-
-	.btn-secondary:hover {
-		background: #e8e2d9;
-	}
-
-	.btn-secondary.active {
-		background: #d8cfc4;
-		color: #3d3425;
 	}
 
 	.btn-icon-only {
