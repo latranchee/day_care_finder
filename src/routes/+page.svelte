@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
-	import type { Daycare, DaycareInput, Stage } from '$lib/types';
+	import type { Daycare, DaycareInput, Review, Contact, Stage } from '$lib/types';
 	import KanbanColumn from '$lib/components/KanbanColumn.svelte';
 	import DaycareModal from '$lib/components/DaycareModal.svelte';
 	import ImportCSV from '$lib/components/ImportCSV.svelte';
 	import AddDaycare from '$lib/components/AddDaycare.svelte';
+
+	type DaycareWithExtras = Daycare & { firstReview?: Review; primaryContact?: Contact; contactCount: number };
 
 	interface Props {
 		data: PageData;
@@ -13,7 +15,7 @@
 
 	let { data }: Props = $props();
 
-	let columns = $state<Record<Stage, Daycare[]>>(structuredClone(data.columns));
+	let columns = $state<Record<Stage, DaycareWithExtras[]>>(structuredClone(data.columns));
 	let selectedDaycare = $state<Daycare | null>(null);
 	let showImport = $state(false);
 	let showAddDaycare = $state(false);
@@ -38,7 +40,7 @@
 
 	function handleDndFinalize(stage: Stage) {
 		return (e: CustomEvent) => {
-			const items = e.detail.items as Daycare[];
+			const items = e.detail.items as DaycareWithExtras[];
 			columns[stage] = items;
 			saveError = null;
 
@@ -162,8 +164,12 @@
 		)
 	);
 
-	function getFilteredItems(items: Daycare[]): Daycare[] {
+	function getFilteredItems(items: DaycareWithExtras[]): DaycareWithExtras[] {
 		return showHidden ? items : items.filter((d) => !d.hidden);
+	}
+
+	function handleReviewsChange() {
+		invalidateAll();
 	}
 </script>
 
@@ -244,6 +250,7 @@
 	onClose={() => selectedDaycare = null}
 	onSave={handleSaveDaycare}
 	onDelete={handleDeleteDaycare}
+	onReviewsChange={handleReviewsChange}
 />
 
 {#if showImport}

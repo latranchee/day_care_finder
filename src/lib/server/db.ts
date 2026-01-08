@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import type { Daycare, DaycareInput, Note, Stage } from '$lib/types';
+import type { Daycare, DaycareInput, Note, Review, ReviewInput, Contact, ContactInput, Stage } from '$lib/types';
 
 const dbPath = path.join(process.cwd(), 'data', 'daycares.db');
 const db = new Database(dbPath);
@@ -32,12 +32,39 @@ db.exec(`
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		daycare_id INTEGER NOT NULL,
 		content TEXT NOT NULL,
+		username TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (daycare_id) REFERENCES daycares(id) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS reviews (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		daycare_id INTEGER NOT NULL,
+		text TEXT NOT NULL,
+		source_url TEXT DEFAULT '',
+		rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (daycare_id) REFERENCES daycares(id) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS contacts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		daycare_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		role TEXT DEFAULT '',
+		phone TEXT DEFAULT '',
+		email TEXT DEFAULT '',
+		notes TEXT DEFAULT '',
+		is_primary INTEGER DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (daycare_id) REFERENCES daycares(id) ON DELETE CASCADE
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_daycares_stage ON daycares(stage);
 	CREATE INDEX IF NOT EXISTS idx_notes_daycare_id ON notes(daycare_id);
+	CREATE INDEX IF NOT EXISTS idx_reviews_daycare_id ON reviews(daycare_id);
+	CREATE INDEX IF NOT EXISTS idx_contacts_daycare_id ON contacts(daycare_id);
 `);
 
 // Migration: Add hidden column if it doesn't exist (for existing databases)
@@ -52,6 +79,40 @@ try {
 	db.exec(`ALTER TABLE daycares ADD COLUMN email TEXT DEFAULT ''`);
 } catch {
 	// Column already exists, ignore error
+}
+
+// Migration: Add username column to notes if it doesn't exist
+try {
+	db.exec(`ALTER TABLE notes ADD COLUMN username TEXT`);
+} catch {
+	// Column already exists, ignore error
+}
+
+// Migration: Add facebook column to daycares if it doesn't exist
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN facebook TEXT DEFAULT ''`);
+} catch {
+	// Column already exists, ignore error
+}
+
+// Migration: Migrate existing phone/email from daycares to contacts table
+try {
+	const daycaresWithContact = db
+		.prepare("SELECT id, phone, email FROM daycares WHERE (phone != '' AND phone IS NOT NULL) OR (email != '' AND email IS NOT NULL)")
+		.all() as { id: number; phone: string; email: string }[];
+
+	for (const dc of daycaresWithContact) {
+		// Check if contact already exists for this daycare
+		const existing = db.prepare('SELECT id FROM contacts WHERE daycare_id = ?').get(dc.id);
+
+		if (!existing && (dc.phone || dc.email)) {
+			db.prepare(
+				`INSERT INTO contacts (daycare_id, name, phone, email, is_primary) VALUES (?, 'Primary Contact', ?, ?, 1)`
+			).run(dc.id, dc.phone || '', dc.email || '');
+		}
+	}
+} catch {
+	// Migration already ran or error
 }
 
 // Daycare CRUD operations
@@ -77,14 +138,15 @@ export function createDaycare(input: DaycareInput): Daycare {
 
 	const result = db
 		.prepare(
-			`INSERT INTO daycares (name, address, phone, email, website, capacity, price, hours, age_range, rating, stage, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO daycares (name, address, phone, email, facebook, website, capacity, price, hours, age_range, rating, stage, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			input.name,
 			input.address || '',
 			input.phone || '',
 			input.email || '',
+			input.facebook || '',
 			input.website || '',
 			input.capacity ?? null,
 			input.price || '',
@@ -116,6 +178,14 @@ export function updateDaycare(id: number, input: Partial<DaycareInput>): Daycare
 	if (input.phone !== undefined) {
 		updates.push('phone = ?');
 		values.push(input.phone);
+	}
+	if (input.email !== undefined) {
+		updates.push('email = ?');
+		values.push(input.email);
+	}
+	if (input.facebook !== undefined) {
+		updates.push('facebook = ?');
+		values.push(input.facebook);
 	}
 	if (input.website !== undefined) {
 		updates.push('website = ?');
@@ -223,16 +293,161 @@ export function getNotesByDaycareId(daycareId: number): Note[] {
 		.all(daycareId) as Note[];
 }
 
-export function createNote(daycareId: number, content: string): Note {
+export function createNote(daycareId: number, content: string, username?: string): Note {
 	const result = db
-		.prepare('INSERT INTO notes (daycare_id, content) VALUES (?, ?)')
-		.run(daycareId, content);
+		.prepare('INSERT INTO notes (daycare_id, content, username) VALUES (?, ?, ?)')
+		.run(daycareId, content, username || null);
 
 	return db.prepare('SELECT * FROM notes WHERE id = ?').get(result.lastInsertRowid) as Note;
 }
 
 export function deleteNote(id: number): boolean {
 	const result = db.prepare('DELETE FROM notes WHERE id = ?').run(id);
+	return result.changes > 0;
+}
+
+// Reviews CRUD operations
+export function getReviewsByDaycareId(daycareId: number): Review[] {
+	return db
+		.prepare('SELECT * FROM reviews WHERE daycare_id = ? ORDER BY created_at DESC')
+		.all(daycareId) as Review[];
+}
+
+export function getFirstReviewByDaycareId(daycareId: number): Review | undefined {
+	return db
+		.prepare('SELECT * FROM reviews WHERE daycare_id = ? ORDER BY created_at DESC LIMIT 1')
+		.get(daycareId) as Review | undefined;
+}
+
+export function createReview(daycareId: number, input: ReviewInput): Review {
+	const result = db
+		.prepare('INSERT INTO reviews (daycare_id, text, source_url, rating) VALUES (?, ?, ?, ?)')
+		.run(daycareId, input.text, input.source_url || '', input.rating);
+
+	return db.prepare('SELECT * FROM reviews WHERE id = ?').get(result.lastInsertRowid) as Review;
+}
+
+export function deleteReview(id: number): boolean {
+	const result = db.prepare('DELETE FROM reviews WHERE id = ?').run(id);
+	return result.changes > 0;
+}
+
+export function getReviewDaycareId(reviewId: number): number | undefined {
+	const result = db
+		.prepare('SELECT daycare_id FROM reviews WHERE id = ?')
+		.get(reviewId) as { daycare_id: number } | undefined;
+	return result?.daycare_id;
+}
+
+export function recalculateDaycareRating(daycareId: number): number | null {
+	const result = db
+		.prepare('SELECT AVG(rating) as avg_rating FROM reviews WHERE daycare_id = ?')
+		.get(daycareId) as { avg_rating: number | null };
+
+	const newRating = result.avg_rating ? Math.round(result.avg_rating * 10) / 10 : null;
+
+	db.prepare('UPDATE daycares SET rating = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+		.run(newRating, daycareId);
+
+	return newRating;
+}
+
+// Contacts CRUD operations
+export function getContactsByDaycareId(daycareId: number): Contact[] {
+	return db
+		.prepare('SELECT * FROM contacts WHERE daycare_id = ? ORDER BY is_primary DESC, created_at ASC')
+		.all(daycareId) as Contact[];
+}
+
+export function getPrimaryContactByDaycareId(daycareId: number): Contact | undefined {
+	return db
+		.prepare('SELECT * FROM contacts WHERE daycare_id = ? AND is_primary = 1 LIMIT 1')
+		.get(daycareId) as Contact | undefined;
+}
+
+export function getContactById(id: number): Contact | undefined {
+	return db.prepare('SELECT * FROM contacts WHERE id = ?').get(id) as Contact | undefined;
+}
+
+export function getContactCountByDaycareId(daycareId: number): number {
+	const result = db
+		.prepare('SELECT COUNT(*) as count FROM contacts WHERE daycare_id = ?')
+		.get(daycareId) as { count: number };
+	return result.count;
+}
+
+export function createContact(daycareId: number, input: ContactInput): Contact {
+	// If this is marked as primary, unset any existing primary contact
+	if (input.is_primary) {
+		db.prepare('UPDATE contacts SET is_primary = 0 WHERE daycare_id = ?').run(daycareId);
+	}
+
+	const result = db
+		.prepare(
+			`INSERT INTO contacts (daycare_id, name, role, phone, email, notes, is_primary)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`
+		)
+		.run(
+			daycareId,
+			input.name,
+			input.role || '',
+			input.phone || '',
+			input.email || '',
+			input.notes || '',
+			input.is_primary ? 1 : 0
+		);
+
+	return db.prepare('SELECT * FROM contacts WHERE id = ?').get(result.lastInsertRowid) as Contact;
+}
+
+export function updateContact(id: number, input: Partial<ContactInput>): Contact | undefined {
+	const existing = getContactById(id);
+	if (!existing) return undefined;
+
+	// If setting as primary, unset any existing primary contact for this daycare
+	if (input.is_primary) {
+		db.prepare('UPDATE contacts SET is_primary = 0 WHERE daycare_id = ?').run(existing.daycare_id);
+	}
+
+	const updates: string[] = [];
+	const values: (string | number | null)[] = [];
+
+	if (input.name !== undefined) {
+		updates.push('name = ?');
+		values.push(input.name);
+	}
+	if (input.role !== undefined) {
+		updates.push('role = ?');
+		values.push(input.role);
+	}
+	if (input.phone !== undefined) {
+		updates.push('phone = ?');
+		values.push(input.phone);
+	}
+	if (input.email !== undefined) {
+		updates.push('email = ?');
+		values.push(input.email);
+	}
+	if (input.notes !== undefined) {
+		updates.push('notes = ?');
+		values.push(input.notes);
+	}
+	if (input.is_primary !== undefined) {
+		updates.push('is_primary = ?');
+		values.push(input.is_primary ? 1 : 0);
+	}
+
+	if (updates.length > 0) {
+		updates.push('updated_at = CURRENT_TIMESTAMP');
+		values.push(id);
+		db.prepare(`UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+	}
+
+	return getContactById(id);
+}
+
+export function deleteContact(id: number): boolean {
+	const result = db.prepare('DELETE FROM contacts WHERE id = ?').run(id);
 	return result.changes > 0;
 }
 

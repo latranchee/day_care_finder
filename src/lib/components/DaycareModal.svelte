@@ -1,35 +1,61 @@
 <script lang="ts">
-	import type { Daycare, Note, DaycareInput } from '$lib/types';
+	import type { Daycare, Note, Review, Contact, ContactInput, DaycareInput } from '$lib/types';
+	import Markdown from './Markdown.svelte';
 
 	interface Props {
 		daycare: Daycare | null;
 		onClose: () => void;
 		onSave: (id: number, data: Partial<DaycareInput>) => void;
 		onDelete: (id: number) => void;
+		onReviewsChange?: () => void;
 	}
 
-	let { daycare, onClose, onSave, onDelete }: Props = $props();
+	let { daycare, onClose, onSave, onDelete, onReviewsChange }: Props = $props();
 
 	let isEditing = $state(false);
 	let notes = $state<Note[]>([]);
 	let newNote = $state('');
+	let noteUsername = $state('');
 	let loadingNotes = $state(false);
+	let expandedNotes = $state<Set<number>>(new Set());
+	let showNoteForm = $state(false);
+	let reviews = $state<Review[]>([]);
+	let newReview = $state({ text: '', source_url: '', rating: 5 });
+	let loadingReviews = $state(false);
+	let showReviewForm = $state(false);
+	let contacts = $state<Contact[]>([]);
+	let newContact = $state<ContactInput>({ name: '', role: '', phone: '', email: '', notes: '', is_primary: false });
+	let loadingContacts = $state(false);
+	let editingContactId = $state<number | null>(null);
+	let editContactForm = $state<ContactInput>({ name: '', role: '', phone: '', email: '', notes: '', is_primary: false });
+	let showContactForm = $state(false);
 	let editForm = $state<Partial<DaycareInput>>({});
 
 	$effect(() => {
 		if (daycare) {
 			loadNotes();
+			loadReviews();
+			loadContacts();
 			editForm = {
 				name: daycare.name,
 				address: daycare.address,
 				phone: daycare.phone,
+				email: daycare.email,
+				facebook: daycare.facebook,
 				website: daycare.website,
 				capacity: daycare.capacity,
 				price: daycare.price,
 				hours: daycare.hours,
-				age_range: daycare.age_range,
-				rating: daycare.rating
+				age_range: daycare.age_range
 			};
+		}
+	});
+
+	// Load username from localStorage on mount
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			const saved = localStorage.getItem('noteUsername');
+			if (saved) noteUsername = saved;
 		}
 	});
 
@@ -51,12 +77,17 @@
 			const res = await fetch(`/api/daycares/${daycare.id}/notes`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ content: newNote.trim() })
+				body: JSON.stringify({ content: newNote.trim(), username: noteUsername.trim() || undefined })
 			});
 			if (res.ok) {
 				const note = await res.json();
 				notes = [note, ...notes];
 				newNote = '';
+				showNoteForm = false;
+				// Save username to localStorage for next time
+				if (noteUsername.trim()) {
+					localStorage.setItem('noteUsername', noteUsername.trim());
+				}
 			}
 		} catch (e) {
 			console.error('Failed to add note:', e);
@@ -71,6 +102,139 @@
 			}
 		} catch (e) {
 			console.error('Failed to delete note:', e);
+		}
+	}
+
+	async function loadReviews() {
+		if (!daycare) return;
+		loadingReviews = true;
+		try {
+			const res = await fetch(`/api/daycares/${daycare.id}/reviews`);
+			reviews = await res.json();
+		} catch (e) {
+			console.error('Failed to load reviews:', e);
+		}
+		loadingReviews = false;
+	}
+
+	async function addReview() {
+		if (!daycare || !newReview.text.trim()) return;
+		try {
+			const res = await fetch(`/api/daycares/${daycare.id}/reviews`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					text: newReview.text.trim(),
+					source_url: newReview.source_url.trim(),
+					rating: newReview.rating
+				})
+			});
+			if (res.ok) {
+				const review = await res.json();
+				reviews = [review, ...reviews];
+				newReview = { text: '', source_url: '', rating: 5 };
+				showReviewForm = false;
+				onReviewsChange?.();
+			}
+		} catch (e) {
+			console.error('Failed to add review:', e);
+		}
+	}
+
+	async function deleteReview(reviewId: number) {
+		try {
+			const res = await fetch(`/api/reviews/${reviewId}`, { method: 'DELETE' });
+			if (res.ok) {
+				reviews = reviews.filter((r) => r.id !== reviewId);
+				onReviewsChange?.();
+			}
+		} catch (e) {
+			console.error('Failed to delete review:', e);
+		}
+	}
+
+	async function loadContacts() {
+		if (!daycare) return;
+		loadingContacts = true;
+		try {
+			const res = await fetch(`/api/daycares/${daycare.id}/contacts`);
+			contacts = await res.json();
+		} catch (e) {
+			console.error('Failed to load contacts:', e);
+		}
+		loadingContacts = false;
+	}
+
+	async function addContact() {
+		if (!daycare || !newContact.name.trim()) return;
+		try {
+			const res = await fetch(`/api/daycares/${daycare.id}/contacts`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(newContact)
+			});
+			if (res.ok) {
+				const contact = await res.json();
+				// If new contact is primary, update existing primary contacts in list
+				if (contact.is_primary) {
+					contacts = contacts.map(c => ({ ...c, is_primary: false }));
+				}
+				contacts = [contact, ...contacts];
+				newContact = { name: '', role: '', phone: '', email: '', notes: '', is_primary: false };
+				showContactForm = false;
+			}
+		} catch (e) {
+			console.error('Failed to add contact:', e);
+		}
+	}
+
+	function startEditContact(contact: Contact) {
+		editingContactId = contact.id;
+		editContactForm = {
+			name: contact.name,
+			role: contact.role,
+			phone: contact.phone,
+			email: contact.email,
+			notes: contact.notes,
+			is_primary: contact.is_primary
+		};
+	}
+
+	async function saveContact() {
+		if (editingContactId === null || !editContactForm.name?.trim()) return;
+		try {
+			const res = await fetch(`/api/contacts/${editingContactId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(editContactForm)
+			});
+			if (res.ok) {
+				const updated = await res.json();
+				// If updated contact is now primary, update existing primary contacts in list
+				if (updated.is_primary) {
+					contacts = contacts.map(c => c.id === updated.id ? updated : { ...c, is_primary: false });
+				} else {
+					contacts = contacts.map(c => c.id === updated.id ? updated : c);
+				}
+				editingContactId = null;
+			}
+		} catch (e) {
+			console.error('Failed to update contact:', e);
+		}
+	}
+
+	function cancelEditContact() {
+		editingContactId = null;
+	}
+
+	async function deleteContact(contactId: number) {
+		try {
+			const res = await fetch(`/api/contacts/${contactId}`, { method: 'DELETE' });
+			if (res.ok) {
+				contacts = contacts.filter((c) => c.id !== contactId);
+			}
+		} catch (e) {
+			console.error('Failed to delete contact:', e);
 		}
 	}
 
@@ -92,6 +256,26 @@
 			hour: 'numeric',
 			minute: '2-digit'
 		});
+	}
+
+	const NOTE_MAX_LENGTH = 150;
+
+	function isNoteLong(content: string): boolean {
+		return content.length > NOTE_MAX_LENGTH;
+	}
+
+	function truncateNote(content: string): string {
+		if (content.length <= NOTE_MAX_LENGTH) return content;
+		return content.slice(0, NOTE_MAX_LENGTH).trim() + '...';
+	}
+
+	function toggleNoteExpanded(noteId: number) {
+		if (expandedNotes.has(noteId)) {
+			expandedNotes.delete(noteId);
+			expandedNotes = new Set(expandedNotes);
+		} else {
+			expandedNotes = new Set(expandedNotes.add(noteId));
+		}
 	}
 </script>
 
@@ -126,9 +310,19 @@
 									<input id="phone" type="tel" bind:value={editForm.phone} />
 								</div>
 								<div class="form-group">
-									<label for="website">Website</label>
-									<input id="website" type="url" bind:value={editForm.website} />
+									<label for="email">Email</label>
+									<input id="email" type="email" bind:value={editForm.email} />
 								</div>
+							</div>
+
+							<div class="form-group">
+								<label for="website">Website</label>
+								<input id="website" type="url" bind:value={editForm.website} />
+							</div>
+
+							<div class="form-group">
+								<label for="facebook">Facebook</label>
+								<input id="facebook" type="url" bind:value={editForm.facebook} placeholder="https://facebook.com/..." />
 							</div>
 
 							<div class="form-row">
@@ -151,11 +345,6 @@
 									<label for="age_range">Age Range</label>
 									<input id="age_range" type="text" bind:value={editForm.age_range} placeholder="e.g., 6mo-5yr" />
 								</div>
-							</div>
-
-							<div class="form-group">
-								<label for="rating">Rating (1-5)</label>
-								<input id="rating" type="number" min="1" max="5" step="0.5" bind:value={editForm.rating} />
 							</div>
 
 							<div class="form-actions">
@@ -193,11 +382,27 @@
 									</div>
 								{/if}
 
+								{#if daycare.email}
+									<div class="info-item">
+										<span class="info-label">Email</span>
+										<a href="mailto:{daycare.email}" class="info-value link">{daycare.email}</a>
+									</div>
+								{/if}
+
 								{#if daycare.website}
 									<div class="info-item">
 										<span class="info-label">Website</span>
 										<a href={daycare.website} target="_blank" rel="noopener" class="info-value link">
 											{daycare.website.replace(/^https?:\/\//, '')}
+										</a>
+									</div>
+								{/if}
+
+								{#if daycare.facebook}
+									<div class="info-item">
+										<span class="info-label">Facebook</span>
+										<a href={daycare.facebook} target="_blank" rel="noopener" class="info-value link">
+											{daycare.facebook.replace(/^https?:\/\/(www\.)?/, '')}
 										</a>
 									</div>
 								{/if}
@@ -244,22 +449,46 @@
 				</div>
 
 				<div class="modal-sidebar">
-					<h3 class="notes-title">Notes</h3>
+					<h3 class="notes-title">Notes ({notes.length})</h3>
 
-					<div class="note-input">
-						<textarea
-							bind:value={newNote}
-							placeholder="Add a note..."
-							rows="3"
-						></textarea>
-						<button
-							class="btn btn-primary btn-sm"
-							onclick={addNote}
-							disabled={!newNote.trim()}
-						>
+					{#if showNoteForm}
+						<div class="note-input">
+							<input
+								type="text"
+								bind:value={noteUsername}
+								placeholder="Your name (optional)"
+								class="username-input"
+							/>
+							<textarea
+								bind:value={newNote}
+								placeholder="Add a note..."
+								rows="3"
+							></textarea>
+							<div class="note-form-actions">
+								<button
+									class="btn btn-secondary btn-sm"
+									onclick={() => { showNoteForm = false; newNote = ''; }}
+								>
+									Cancel
+								</button>
+								<button
+									class="btn btn-primary btn-sm"
+									onclick={addNote}
+									disabled={!newNote.trim()}
+								>
+									Add Note
+								</button>
+							</div>
+						</div>
+					{:else}
+						<button class="btn btn-secondary btn-sm add-note-btn" onclick={() => showNoteForm = true}>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="add-icon">
+								<line x1="12" y1="5" x2="12" y2="19"/>
+								<line x1="5" y1="12" x2="19" y2="12"/>
+							</svg>
 							Add Note
 						</button>
-					</div>
+					{/if}
 
 					<div class="notes-list">
 						{#if loadingNotes}
@@ -269,13 +498,293 @@
 						{:else}
 							{#each notes as note (note.id)}
 								<div class="note-item">
-									<p class="note-content">{note.content}</p>
+									<div class="note-content">
+										{#if isNoteLong(note.content) && !expandedNotes.has(note.id)}
+											<Markdown content={truncateNote(note.content)} />
+											<button class="show-more-btn" onclick={() => toggleNoteExpanded(note.id)}>
+												Show more
+											</button>
+										{:else}
+											<Markdown content={note.content} />
+											{#if isNoteLong(note.content)}
+												<button class="show-more-btn" onclick={() => toggleNoteExpanded(note.id)}>
+													Show less
+												</button>
+											{/if}
+										{/if}
+									</div>
 									<div class="note-footer">
-										<span class="note-date">{formatDate(note.created_at)}</span>
+										<span class="note-meta">
+											{#if note.username}<span class="note-author">{note.username}</span>{/if}
+											<span class="note-date">{formatDate(note.created_at)}</span>
+										</span>
 										<button
 											class="note-delete"
 											onclick={() => deleteNote(note.id)}
 											aria-label="Delete note"
+										>
+											×
+										</button>
+									</div>
+								</div>
+							{/each}
+						{/if}
+					</div>
+
+					<div class="section-divider"></div>
+
+					<h3 class="contacts-title">Contacts ({contacts.length})</h3>
+
+					{#if showContactForm}
+						<div class="contact-input">
+							<input
+								type="text"
+								bind:value={newContact.name}
+								placeholder="Contact name *"
+								class="contact-field"
+							/>
+							<input
+								type="text"
+								bind:value={newContact.role}
+								placeholder="Role (e.g., Director)"
+								class="contact-field"
+							/>
+								<input
+								type="tel"
+								bind:value={newContact.phone}
+								placeholder="Phone"
+								class="contact-field"
+							/>
+							<input
+								type="email"
+								bind:value={newContact.email}
+								placeholder="Email"
+								class="contact-field"
+							/>
+							<textarea
+								bind:value={newContact.notes}
+								placeholder="Notes about this contact..."
+								rows="2"
+								class="contact-notes-input"
+							></textarea>
+							<label class="primary-checkbox">
+								<input type="checkbox" bind:checked={newContact.is_primary} />
+								Primary contact
+							</label>
+							<div class="contact-form-actions">
+								<button
+									class="btn btn-secondary btn-sm"
+									onclick={() => { showContactForm = false; newContact = { name: '', role: '', phone: '', email: '', notes: '', is_primary: false }; }}
+								>
+									Cancel
+								</button>
+								<button
+									class="btn btn-primary btn-sm"
+									onclick={addContact}
+									disabled={!newContact.name.trim()}
+								>
+									Add Contact
+								</button>
+							</div>
+						</div>
+					{:else}
+						<button class="btn btn-secondary btn-sm add-contact-btn" onclick={() => showContactForm = true}>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="add-icon">
+								<line x1="12" y1="5" x2="12" y2="19"/>
+								<line x1="5" y1="12" x2="19" y2="12"/>
+							</svg>
+							Add Contact
+						</button>
+					{/if}
+
+					<div class="contacts-list">
+						{#if loadingContacts}
+							<p class="contacts-loading">Loading contacts...</p>
+						{:else if contacts.length === 0}
+							<p class="contacts-empty">No contacts yet</p>
+						{:else}
+							{#each contacts as contact (contact.id)}
+								<div class="contact-item" class:is-primary={contact.is_primary}>
+									{#if editingContactId === contact.id}
+										<div class="contact-edit-form">
+											<input
+												type="text"
+												bind:value={editContactForm.name}
+												placeholder="Name *"
+												class="contact-field"
+											/>
+											<input
+												type="text"
+												bind:value={editContactForm.role}
+												placeholder="Role"
+												class="contact-field"
+											/>
+											<input
+												type="tel"
+												bind:value={editContactForm.phone}
+												placeholder="Phone"
+												class="contact-field"
+											/>
+											<input
+												type="email"
+												bind:value={editContactForm.email}
+												placeholder="Email"
+												class="contact-field"
+											/>
+											<textarea
+												bind:value={editContactForm.notes}
+												placeholder="Notes"
+												rows="2"
+												class="contact-notes-input"
+											></textarea>
+											<label class="primary-checkbox">
+												<input type="checkbox" bind:checked={editContactForm.is_primary} />
+												Primary contact
+											</label>
+											<div class="contact-edit-actions">
+												<button class="btn btn-sm btn-secondary" onclick={cancelEditContact}>Cancel</button>
+												<button class="btn btn-sm btn-primary" onclick={saveContact} disabled={!editContactForm.name?.trim()}>Save</button>
+											</div>
+										</div>
+									{:else}
+										<div class="contact-header">
+											<div class="contact-name-row">
+												<span class="contact-name">{contact.name}</span>
+												{#if contact.is_primary}
+													<span class="primary-badge">Primary</span>
+												{/if}
+											</div>
+											{#if contact.role}
+												<span class="contact-role">{contact.role}</span>
+											{/if}
+										</div>
+										<div class="contact-details">
+											{#if contact.phone}
+												<a href="tel:{contact.phone}" class="contact-info">
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="contact-icon">
+														<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+													</svg>
+													{contact.phone}
+												</a>
+											{/if}
+											{#if contact.email}
+												<a href="mailto:{contact.email}" class="contact-info">
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="contact-icon">
+														<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+														<polyline points="22,6 12,13 2,6"/>
+													</svg>
+													{contact.email}
+												</a>
+											{/if}
+										</div>
+										{#if contact.notes}
+											<p class="contact-notes">{contact.notes}</p>
+										{/if}
+										<div class="contact-footer">
+											<button class="contact-edit" onclick={() => startEditContact(contact)} aria-label="Edit contact">
+												Edit
+											</button>
+											<button
+												class="contact-delete"
+												onclick={() => deleteContact(contact.id)}
+												aria-label="Delete contact"
+											>
+												Delete
+											</button>
+										</div>
+									{/if}
+								</div>
+							{/each}
+						{/if}
+					</div>
+
+					<div class="section-divider"></div>
+
+					<h3 class="reviews-title">Reviews ({reviews.length})</h3>
+
+					{#if showReviewForm}
+						<div class="review-input">
+							<div class="rating-input">
+								<label>Rating</label>
+								<div class="star-selector">
+									{#each [1, 2, 3, 4, 5] as star}
+										<button
+											type="button"
+											class="star-btn"
+											class:filled={star <= newReview.rating}
+											onclick={() => newReview.rating = star}
+										>
+											★
+										</button>
+									{/each}
+								</div>
+							</div>
+
+							<textarea
+								bind:value={newReview.text}
+								placeholder="Write a review..."
+								rows="3"
+							></textarea>
+
+							<input
+								type="url"
+								bind:value={newReview.source_url}
+								placeholder="Source URL (optional)"
+							/>
+
+							<div class="review-form-actions">
+								<button
+									class="btn btn-secondary btn-sm"
+									onclick={() => { showReviewForm = false; newReview = { text: '', source_url: '', rating: 5 }; }}
+								>
+									Cancel
+								</button>
+								<button
+									class="btn btn-primary btn-sm"
+									onclick={addReview}
+									disabled={!newReview.text.trim()}
+								>
+									Add Review
+								</button>
+							</div>
+						</div>
+					{:else}
+						<button class="btn btn-secondary btn-sm add-review-btn" onclick={() => showReviewForm = true}>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="add-icon">
+								<line x1="12" y1="5" x2="12" y2="19"/>
+								<line x1="5" y1="12" x2="19" y2="12"/>
+							</svg>
+							Add Review
+						</button>
+					{/if}
+
+					<div class="reviews-list">
+						{#if loadingReviews}
+							<p class="reviews-loading">Loading reviews...</p>
+						{:else if reviews.length === 0}
+							<p class="reviews-empty">No reviews yet</p>
+						{:else}
+							{#each reviews as review (review.id)}
+								<div class="review-item">
+									<div class="review-header">
+										<span class="review-stars">
+											{#each Array(5) as _, i}
+												<span class="star" class:filled={i < review.rating}>★</span>
+											{/each}
+										</span>
+										{#if review.source_url}
+											<a href={review.source_url} target="_blank" rel="noopener" class="review-link">
+												View Source
+											</a>
+										{/if}
+									</div>
+									<p class="review-content">{review.text}</p>
+									<div class="review-footer">
+										<span class="review-date">{formatDate(review.created_at)}</span>
+										<button
+											class="review-delete"
+											onclick={() => deleteReview(review.id)}
+											aria-label="Delete review"
 										>
 											×
 										</button>
@@ -423,18 +932,23 @@
 
 	.info-grid {
 		display: grid;
-		gap: 1rem;
-		margin-bottom: 2rem;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 0.75rem 1.5rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.info-item {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.125rem;
+	}
+
+	.info-item.wide {
+		grid-column: span 2;
 	}
 
 	.info-label {
-		font-size: 0.75rem;
+		font-size: 0.7rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -442,7 +956,7 @@
 	}
 
 	.info-value {
-		font-size: 1rem;
+		font-size: 0.9rem;
 		color: var(--text-primary);
 	}
 
@@ -560,17 +1074,47 @@
 	}
 
 	.note-content {
-		font-size: 0.9rem;
-		color: var(--text-primary);
 		margin: 0 0 0.5rem 0;
-		white-space: pre-wrap;
-		line-height: 1.5;
 	}
 
 	.note-footer {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+	}
+
+	.username-input {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		font-size: 0.85rem;
+		background: white;
+		color: var(--text-primary);
+	}
+
+	.username-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.note-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+	}
+
+	.note-author {
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+
+	.note-author::after {
+		content: '\2022';
+		margin-left: 0.5rem;
+		color: var(--text-secondary);
+		font-weight: normal;
 	}
 
 	.note-date {
@@ -593,6 +1137,36 @@
 	.note-delete:hover {
 		opacity: 1;
 		color: #c44e4e;
+	}
+
+	.show-more-btn {
+		background: none;
+		border: none;
+		color: var(--accent);
+		font-size: 0.8rem;
+		font-weight: 500;
+		cursor: pointer;
+		padding: 0;
+		margin-top: 0.25rem;
+	}
+
+	.show-more-btn:hover {
+		text-decoration: underline;
+	}
+
+	.note-form-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+	}
+
+	.add-note-btn {
+		width: 100%;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		margin-bottom: 1rem;
 	}
 
 	/* Buttons */
@@ -641,6 +1215,413 @@
 
 	.btn-danger:hover {
 		background: #f5d5d5;
+	}
+
+	/* Reviews */
+	.section-divider {
+		height: 1px;
+		background: var(--border-color);
+		margin: 1.5rem 0;
+	}
+
+	.reviews-title {
+		font-family: 'DM Sans', system-ui, sans-serif;
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--text-primary);
+		margin: 0 0 1rem 0;
+	}
+
+	.review-input {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.rating-input {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.rating-input label {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+	}
+
+	.star-selector {
+		display: flex;
+		gap: 0.25rem;
+	}
+
+	.star-btn {
+		background: none;
+		border: none;
+		font-size: 1.25rem;
+		color: #ddd;
+		cursor: pointer;
+		padding: 0;
+		transition: color 0.15s ease;
+	}
+
+	.star-btn.filled {
+		color: var(--accent);
+	}
+
+	.star-btn:hover {
+		color: var(--accent);
+	}
+
+	.review-input input[type="url"] {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		font-size: 0.85rem;
+		background: white;
+	}
+
+	.review-input input[type="url"]:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.review-input textarea {
+		padding: 0.75rem;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		font-size: 0.9rem;
+		resize: vertical;
+		font-family: inherit;
+		background: white;
+	}
+
+	.review-input textarea:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.reviews-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.reviews-loading,
+	.reviews-empty {
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+		text-align: center;
+		padding: 2rem 0;
+	}
+
+	.review-item {
+		background: white;
+		border: 1px solid var(--border-color);
+		border-radius: 10px;
+		padding: 0.875rem;
+	}
+
+	.review-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.5rem;
+	}
+
+	.review-stars {
+		display: flex;
+		gap: 0.125rem;
+	}
+
+	.review-stars .star {
+		font-size: 0.875rem;
+		color: #ddd;
+	}
+
+	.review-stars .star.filled {
+		color: var(--accent);
+	}
+
+	.review-link {
+		font-size: 0.75rem;
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.review-link:hover {
+		text-decoration: underline;
+	}
+
+	.review-content {
+		font-size: 0.9rem;
+		color: var(--text-primary);
+		margin: 0 0 0.5rem 0;
+		white-space: pre-wrap;
+		line-height: 1.5;
+	}
+
+	.review-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.review-date {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+	}
+
+	.review-delete {
+		background: none;
+		border: none;
+		font-size: 1.25rem;
+		color: var(--text-secondary);
+		cursor: pointer;
+		padding: 0 0.25rem;
+		line-height: 1;
+		opacity: 0.5;
+		transition: opacity 0.15s ease;
+	}
+
+	.review-delete:hover {
+		opacity: 1;
+		color: #c44e4e;
+	}
+
+	/* Contacts */
+	.contacts-title {
+		font-family: 'DM Sans', system-ui, sans-serif;
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--text-primary);
+		margin: 0 0 1rem 0;
+	}
+
+	.contact-input {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.contact-field {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		font-size: 0.85rem;
+		background: white;
+		color: var(--text-primary);
+	}
+
+	.contact-field:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.contact-notes-input {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		font-size: 0.85rem;
+		background: white;
+		resize: vertical;
+		font-family: inherit;
+	}
+
+	.contact-notes-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.primary-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+		cursor: pointer;
+	}
+
+	.primary-checkbox input[type="checkbox"] {
+		width: 16px;
+		height: 16px;
+		accent-color: var(--accent);
+	}
+
+	.contacts-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.contacts-loading,
+	.contacts-empty {
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+		text-align: center;
+		padding: 2rem 0;
+	}
+
+	.contact-item {
+		background: white;
+		border: 1px solid var(--border-color);
+		border-radius: 10px;
+		padding: 0.875rem;
+	}
+
+	.contact-item.is-primary {
+		border-color: var(--accent);
+		background: #fffaf6;
+	}
+
+	.contact-header {
+		margin-bottom: 0.5rem;
+	}
+
+	.contact-name-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.contact-name {
+		font-weight: 600;
+		color: var(--text-primary);
+		font-size: 0.95rem;
+	}
+
+	.primary-badge {
+		font-size: 0.65rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		background: var(--accent);
+		color: white;
+		padding: 0.125rem 0.375rem;
+		border-radius: 4px;
+	}
+
+	.contact-role {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+	}
+
+	.contact-details {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.contact-info {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.8rem;
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.contact-info:hover {
+		text-decoration: underline;
+	}
+
+	.contact-icon {
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
+	}
+
+	.contact-notes {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+		margin: 0 0 0.5rem 0;
+		font-style: italic;
+		line-height: 1.4;
+	}
+
+	.contact-footer {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.75rem;
+	}
+
+	.contact-edit,
+	.contact-delete {
+		background: none;
+		border: none;
+		font-size: 0.75rem;
+		cursor: pointer;
+		padding: 0;
+		opacity: 0.6;
+		transition: opacity 0.15s ease;
+	}
+
+	.contact-edit {
+		color: var(--accent);
+	}
+
+	.contact-delete {
+		color: var(--text-secondary);
+	}
+
+	.contact-edit:hover,
+	.contact-delete:hover {
+		opacity: 1;
+	}
+
+	.contact-delete:hover {
+		color: #c44e4e;
+	}
+
+	.contact-edit-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.contact-edit-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+		margin-top: 0.25rem;
+	}
+
+	.contact-form-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+	}
+
+	.add-contact-btn {
+		width: 100%;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		margin-bottom: 1rem;
+	}
+
+	.add-icon {
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
+	}
+
+	.review-form-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+	}
+
+	.add-review-btn {
+		width: 100%;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		margin-bottom: 1rem;
 	}
 
 	@media (max-width: 768px) {

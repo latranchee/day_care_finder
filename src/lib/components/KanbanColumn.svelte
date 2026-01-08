@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { dndzone } from 'svelte-dnd-action';
-	import type { Daycare, Stage } from '$lib/types';
+	import type { Daycare, Review, Contact, Stage } from '$lib/types';
 	import DaycareCard from './DaycareCard.svelte';
+
+	type DaycareWithExtras = Daycare & { firstReview?: Review; primaryContact?: Contact; contactCount: number };
 
 	interface Props {
 		stage: { id: Stage; label: string };
-		items: Daycare[];
+		items: DaycareWithExtras[];
 		onDndConsider: (e: CustomEvent) => void;
 		onDndFinalize: (e: CustomEvent) => void;
 		onSelectDaycare: (daycare: Daycare) => void;
@@ -63,7 +65,7 @@
 	>
 		{#each items as item (item.id)}
 			<div class="card-wrapper">
-				<DaycareCard daycare={item} onSelect={onSelectDaycare} onHide={onHideDaycare} />
+				<DaycareCard daycare={item} firstReview={item.firstReview} primaryContact={item.primaryContact} contactCount={item.contactCount} onSelect={onSelectDaycare} onHide={onHideDaycare} />
 			</div>
 		{/each}
 	</div>

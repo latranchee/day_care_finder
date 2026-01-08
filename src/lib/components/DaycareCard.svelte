@@ -1,17 +1,25 @@
 <script lang="ts">
-	import type { Daycare } from '$lib/types';
+	import type { Daycare, Review, Contact } from '$lib/types';
 
 	interface Props {
 		daycare: Daycare;
+		firstReview?: Review | null;
+		primaryContact?: Contact | null;
+		contactCount?: number;
 		onSelect: (daycare: Daycare) => void;
 		onHide?: (id: number) => void;
 	}
 
-	let { daycare, onSelect, onHide }: Props = $props();
+	let { daycare, firstReview = null, primaryContact = null, contactCount = 0, onSelect, onHide }: Props = $props();
 
 	function formatRating(rating: number | null): string {
 		if (rating === null) return '—';
 		return '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
+	}
+
+	function truncateText(text: string, maxLength: number = 80): string {
+		if (text.length <= maxLength) return text;
+		return text.slice(0, maxLength).trim() + '...';
 	}
 
 	function handleHide(e: MouseEvent) {
@@ -74,7 +82,63 @@
 		{#if daycare.age_range}
 			<span class="meta-tag age">{daycare.age_range}</span>
 		{/if}
+		{#if daycare.email}
+			<span class="meta-tag email" title={daycare.email}>
+				<svg class="email-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+					<polyline points="22,6 12,13 2,6"/>
+				</svg>
+			</span>
+		{/if}
+		{#if daycare.facebook}
+			<a
+				href={daycare.facebook}
+				target="_blank"
+				rel="noopener"
+				class="meta-tag facebook"
+				title="View Facebook page"
+				onclick={(e) => e.stopPropagation()}
+			>
+				<svg class="facebook-icon" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+				</svg>
+			</a>
+		{/if}
+		{#if contactCount > 0}
+			<span
+				class="meta-tag contacts"
+				title={primaryContact ? `${primaryContact.name}${primaryContact.role ? ` (${primaryContact.role})` : ''}` : `${contactCount} contact${contactCount > 1 ? 's' : ''}`}
+			>
+				<svg class="contacts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+					<circle cx="9" cy="7" r="4"/>
+					<path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+					<path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+				</svg>
+				{contactCount}
+			</span>
+		{/if}
 	</div>
+
+	{#if firstReview}
+		<div class="review-preview">
+			<div class="review-header">
+				<span class="review-rating">{'★'.repeat(firstReview.rating)}{'☆'.repeat(5 - firstReview.rating)}</span>
+				{#if firstReview.source_url}
+					<a
+						href={firstReview.source_url}
+						target="_blank"
+						rel="noopener"
+						class="review-source"
+						onclick={(e) => e.stopPropagation()}
+					>
+						Source
+					</a>
+				{/if}
+			</div>
+			<p class="review-text">{truncateText(firstReview.text)}</p>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -197,6 +261,50 @@
 		color: #4a5f4a;
 	}
 
+	.meta-tag.email {
+		background: #e8eaf0;
+		color: #4a5a6a;
+		padding: 0.25rem;
+		display: flex;
+		align-items: center;
+	}
+
+	.email-icon {
+		width: 12px;
+		height: 12px;
+	}
+
+	.meta-tag.facebook {
+		background: #e8eaf4;
+		color: #1877f2;
+		padding: 0.25rem;
+		display: flex;
+		align-items: center;
+		text-decoration: none;
+	}
+
+	.meta-tag.facebook:hover {
+		background: #d0d8f0;
+	}
+
+	.facebook-icon {
+		width: 12px;
+		height: 12px;
+	}
+
+	.meta-tag.contacts {
+		background: #e8f4e8;
+		color: #4a6a4a;
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.contacts-icon {
+		width: 12px;
+		height: 12px;
+	}
+
 	/* Hide button - appears on hover */
 	.hide-btn {
 		position: absolute;
@@ -248,5 +356,43 @@
 
 	.daycare-card.hidden .hide-btn {
 		opacity: 0.8;
+	}
+
+	/* Review preview styling */
+	.review-preview {
+		margin-top: 0.75rem;
+		padding-top: 0.75rem;
+		border-top: 1px dashed var(--card-border);
+	}
+
+	.review-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.375rem;
+	}
+
+	.review-rating {
+		font-size: 0.6rem;
+		color: var(--accent-warm);
+		letter-spacing: -1px;
+	}
+
+	.review-source {
+		font-size: 0.7rem;
+		color: var(--accent-warm);
+		text-decoration: none;
+	}
+
+	.review-source:hover {
+		text-decoration: underline;
+	}
+
+	.review-text {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		margin: 0;
+		line-height: 1.4;
+		font-style: italic;
 	}
 </style>

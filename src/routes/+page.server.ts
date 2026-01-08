@@ -1,13 +1,15 @@
 import type { PageServerLoad } from './$types';
-import { getAllDaycares } from '$lib/server/db';
-import type { Daycare, Stage } from '$lib/types';
+import { getAllDaycares, getFirstReviewByDaycareId, getPrimaryContactByDaycareId, getContactCountByDaycareId } from '$lib/server/db';
+import type { Daycare, Review, Contact, Stage } from '$lib/types';
 import { STAGES } from '$lib/types';
+
+export type DaycareWithExtras = Daycare & { firstReview?: Review; primaryContact?: Contact; contactCount: number };
 
 export const load: PageServerLoad = async () => {
 	const daycares = getAllDaycares();
 
-	// Group daycares by stage
-	const columns: Record<Stage, Daycare[]> = {
+	// Group daycares by stage with first review and contact info
+	const columns: Record<Stage, DaycareWithExtras[]> = {
 		to_research: [],
 		to_contact: [],
 		contacted: [],
@@ -17,7 +19,15 @@ export const load: PageServerLoad = async () => {
 	};
 
 	for (const daycare of daycares) {
-		columns[daycare.stage].push(daycare);
+		const firstReview = getFirstReviewByDaycareId(daycare.id);
+		const primaryContact = getPrimaryContactByDaycareId(daycare.id);
+		const contactCount = getContactCountByDaycareId(daycare.id);
+		columns[daycare.stage].push({
+			...daycare,
+			firstReview,
+			primaryContact,
+			contactCount
+		});
 	}
 
 	// Sort each column by position
