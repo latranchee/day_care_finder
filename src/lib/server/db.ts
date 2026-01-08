@@ -130,124 +130,101 @@ db.exec(`
 	CREATE INDEX IF NOT EXISTS idx_invitations_child_id ON invitations(child_id);
 `);
 
-// Migration: Add hidden column if it doesn't exist (for existing databases)
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN hidden INTEGER DEFAULT 0`);
-} catch {
-	// Column already exists, ignore error
+// ============================================================================
+// Migration Helpers
+// ============================================================================
+
+/**
+ * Safely adds a column to a table, ignoring "duplicate column" errors but
+ * logging and rethrowing any other errors.
+ */
+function safeAddColumn(tableName: string, columnDef: string): void {
+	try {
+		db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnDef}`);
+	} catch (error: unknown) {
+		// SQLite error messages for duplicate column include "duplicate column name"
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		if (errorMessage.toLowerCase().includes('duplicate column') ||
+		    errorMessage.toLowerCase().includes('already exists')) {
+			// Column already exists, this is expected during migrations
+			return;
+		}
+		// Rethrow unexpected errors
+		console.error(`Migration error adding column to ${tableName}: ${columnDef}`, error);
+		throw error;
+	}
 }
 
-// Migration: Add email column if it doesn't exist
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN email TEXT DEFAULT ''`);
-} catch {
-	// Column already exists, ignore error
+/**
+ * Safely creates an index, ignoring "already exists" errors.
+ */
+function safeCreateIndex(indexDef: string): void {
+	try {
+		db.exec(`CREATE INDEX ${indexDef}`);
+	} catch (error: unknown) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		if (errorMessage.toLowerCase().includes('already exists')) {
+			return;
+		}
+		console.error(`Migration error creating index: ${indexDef}`, error);
+		throw error;
+	}
 }
 
-// Migration: Add username column to notes if it doesn't exist
-try {
-	db.exec(`ALTER TABLE notes ADD COLUMN username TEXT`);
-} catch {
-	// Column already exists, ignore error
+/**
+ * Safely executes a data migration, logging errors but not failing.
+ */
+function safeDataMigration(migrationName: string, migrationFn: () => void): void {
+	try {
+		migrationFn();
+	} catch (error: unknown) {
+		console.error(`Data migration '${migrationName}' failed:`, error);
+		// Data migrations are non-critical, don't rethrow
+	}
 }
 
-// Migration: Add facebook column to daycares if it doesn't exist
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN facebook TEXT DEFAULT ''`);
-} catch {
-	// Column already exists, ignore error
-}
+// ============================================================================
+// Migrations
+// ============================================================================
+
+// Migration: Add hidden column (for existing databases)
+safeAddColumn('daycares', 'hidden INTEGER DEFAULT 0');
+
+// Migration: Add email column
+safeAddColumn('daycares', "email TEXT DEFAULT ''");
+
+// Migration: Add username column to notes
+safeAddColumn('notes', 'username TEXT');
+
+// Migration: Add facebook column to daycares
+safeAddColumn('daycares', "facebook TEXT DEFAULT ''");
 
 // Migration: Add commute time columns for tracking travel time from home
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN commute_minutes INTEGER`);
-} catch {
-	// Column already exists, ignore error
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN commute_origin TEXT DEFAULT ''`);
-} catch {
-	// Column already exists, ignore error
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN commute_destination TEXT DEFAULT ''`);
-} catch {
-	// Column already exists, ignore error
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN commute_calculated_at DATETIME`);
-} catch {
-	// Column already exists, ignore error
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN commute_maps_url TEXT DEFAULT ''`);
-} catch {
-	// Column already exists, ignore error
-}
+safeAddColumn('daycares', 'commute_minutes INTEGER');
+safeAddColumn('daycares', "commute_origin TEXT DEFAULT ''");
+safeAddColumn('daycares', "commute_destination TEXT DEFAULT ''");
+safeAddColumn('daycares', 'commute_calculated_at DATETIME');
+safeAddColumn('daycares', "commute_maps_url TEXT DEFAULT ''");
 
 // Migration: Add owner_id column for daycare ownership
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN owner_id INTEGER REFERENCES users(id)`);
-} catch {
-	// Column already exists, ignore error
-}
+safeAddColumn('daycares', 'owner_id INTEGER REFERENCES users(id)');
 
 // Migration: Add portal fields
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN portal_url TEXT DEFAULT ''`);
-} catch {
-	// Column already exists
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN installation_id TEXT DEFAULT ''`);
-} catch {
-	// Column already exists
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN daycare_type TEXT DEFAULT ''`);
-} catch {
-	// Column already exists
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN subventionne INTEGER DEFAULT 0`);
-} catch {
-	// Column already exists
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN places_poupons INTEGER`);
-} catch {
-	// Column already exists
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN places_18_mois_plus INTEGER`);
-} catch {
-	// Column already exists
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN description TEXT DEFAULT ''`);
-} catch {
-	// Column already exists
-}
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN horaires TEXT DEFAULT ''`);
-} catch {
-	// Column already exists
-}
+safeAddColumn('daycares', "portal_url TEXT DEFAULT ''");
+safeAddColumn('daycares', "installation_id TEXT DEFAULT ''");
+safeAddColumn('daycares', "daycare_type TEXT DEFAULT ''");
+safeAddColumn('daycares', 'subventionne INTEGER DEFAULT 0');
+safeAddColumn('daycares', 'places_poupons INTEGER');
+safeAddColumn('daycares', 'places_18_mois_plus INTEGER');
+safeAddColumn('daycares', "description TEXT DEFAULT ''");
+safeAddColumn('daycares', "horaires TEXT DEFAULT ''");
 
 // Migration: Add child_id column for scoping daycares to children
-try {
-	db.exec(`ALTER TABLE daycares ADD COLUMN child_id INTEGER REFERENCES children(id) ON DELETE CASCADE`);
-} catch {
-	// Column already exists
-}
-try {
-	db.exec(`CREATE INDEX IF NOT EXISTS idx_daycares_child_id ON daycares(child_id)`);
-} catch {
-	// Index already exists
-}
+safeAddColumn('daycares', 'child_id INTEGER REFERENCES children(id) ON DELETE CASCADE');
+safeCreateIndex('IF NOT EXISTS idx_daycares_child_id ON daycares(child_id)');
 
 // Migration: Migrate existing phone/email from daycares to contacts table
-try {
+safeDataMigration('migrate_daycare_contacts', () => {
 	const daycaresWithContact = db
 		.prepare("SELECT id, phone, email FROM daycares WHERE (phone != '' AND phone IS NOT NULL) OR (email != '' AND email IS NOT NULL)")
 		.all() as { id: number; phone: string; email: string }[];
@@ -262,13 +239,262 @@ try {
 			).run(dc.id, dc.phone || '', dc.email || '');
 		}
 	}
-} catch {
-	// Migration already ran or error
+})
+
+// ============================================================================
+// Generic Update Query Builder
+// ============================================================================
+
+interface FieldMapping {
+	/** The key in the input object */
+	inputKey: string;
+	/** The SQL column name (defaults to inputKey if not specified) */
+	column?: string;
+	/** Transform function to convert the input value for SQL (e.g., boolean to 0/1) */
+	transform?: (value: unknown) => string | number | null;
 }
 
+/**
+ * Builds and executes an UPDATE query dynamically based on provided fields.
+ * Only includes fields that are present (not undefined) in the input.
+ *
+ * @returns true if the query was executed, false if no fields to update
+ */
+function buildAndExecuteUpdate<T extends Record<string, unknown>>(
+	tableName: string,
+	id: number,
+	input: T,
+	fieldMappings: FieldMapping[],
+	includeTimestamp: boolean = true
+): boolean {
+	const updates: string[] = [];
+	const values: (string | number | null)[] = [];
+
+	for (const mapping of fieldMappings) {
+		const value = input[mapping.inputKey];
+		if (value !== undefined) {
+			const column = mapping.column || mapping.inputKey;
+			updates.push(`${column} = ?`);
+
+			if (mapping.transform) {
+				values.push(mapping.transform(value));
+			} else {
+				values.push(value as string | number | null);
+			}
+		}
+	}
+
+	if (updates.length === 0) {
+		return false;
+	}
+
+	if (includeTimestamp) {
+		updates.push('updated_at = CURRENT_TIMESTAMP');
+	}
+
+	values.push(id);
+	db.prepare(`UPDATE ${tableName} SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+	return true;
+}
+
+// Boolean to integer transform for SQLite
+const boolToInt = (value: unknown): number => (value ? 1 : 0);
+
+// ============================================================================
 // Daycare CRUD operations
+// ============================================================================
+
 export function getAllDaycares(): Daycare[] {
 	return db.prepare('SELECT * FROM daycares ORDER BY stage, position').all() as Daycare[];
+}
+
+// Raw row type from the JOINed query
+interface DaycareWithExtrasRow {
+	// Daycare fields
+	id: number;
+	name: string;
+	address: string;
+	phone: string;
+	email: string;
+	facebook: string;
+	website: string;
+	portal_url: string;
+	capacity: number | null;
+	price: string;
+	hours: string;
+	age_range: string;
+	rating: number | null;
+	stage: Stage;
+	position: number;
+	hidden: number;
+	commute_minutes: number | null;
+	commute_origin: string;
+	commute_destination: string;
+	commute_maps_url: string;
+	commute_calculated_at: string | null;
+	created_at: string;
+	updated_at: string;
+	installation_id: string;
+	daycare_type: string;
+	subventionne: number;
+	places_poupons: number | null;
+	places_18_mois_plus: number | null;
+	description: string;
+	horaires: string;
+	child_id: number | null;
+	owner_id: number | null;
+	// First review fields (from subquery)
+	first_review_id: number | null;
+	first_review_text: string | null;
+	first_review_source_url: string | null;
+	first_review_rating: number | null;
+	first_review_created_at: string | null;
+	// Primary contact fields (from subquery)
+	primary_contact_id: number | null;
+	primary_contact_name: string | null;
+	primary_contact_role: string | null;
+	primary_contact_phone: string | null;
+	primary_contact_email: string | null;
+	primary_contact_notes: string | null;
+	primary_contact_is_primary: number | null;
+	primary_contact_created_at: string | null;
+	primary_contact_updated_at: string | null;
+	// Contact count (from subquery)
+	contact_count: number;
+}
+
+// Extended daycare type with related data for display
+export interface DaycareWithExtras extends Daycare {
+	firstReview?: Review;
+	primaryContact?: Contact;
+	contactCount: number;
+}
+
+/**
+ * Fetches all daycares with their first review, primary contact, and contact count
+ * in a single optimized query using JOINs and subqueries.
+ * This replaces the N+1 query pattern where we would fetch daycares first,
+ * then loop through each one to fetch reviews and contacts separately.
+ *
+ * Query count: 1 (instead of 3N+1)
+ */
+export function getAllDaycaresWithExtras(): DaycareWithExtras[] {
+	const query = `
+		SELECT
+			d.*,
+			-- First review (most recent)
+			fr.id as first_review_id,
+			fr.text as first_review_text,
+			fr.source_url as first_review_source_url,
+			fr.rating as first_review_rating,
+			fr.created_at as first_review_created_at,
+			-- Primary contact
+			pc.id as primary_contact_id,
+			pc.name as primary_contact_name,
+			pc.role as primary_contact_role,
+			pc.phone as primary_contact_phone,
+			pc.email as primary_contact_email,
+			pc.notes as primary_contact_notes,
+			pc.is_primary as primary_contact_is_primary,
+			pc.created_at as primary_contact_created_at,
+			pc.updated_at as primary_contact_updated_at,
+			-- Contact count
+			COALESCE(cc.count, 0) as contact_count
+		FROM daycares d
+		-- Left join to get the first (most recent) review per daycare
+		LEFT JOIN (
+			SELECT r1.*
+			FROM reviews r1
+			INNER JOIN (
+				SELECT daycare_id, MAX(created_at) as max_created_at
+				FROM reviews
+				GROUP BY daycare_id
+			) r2 ON r1.daycare_id = r2.daycare_id AND r1.created_at = r2.max_created_at
+		) fr ON d.id = fr.daycare_id
+		-- Left join to get the primary contact per daycare
+		LEFT JOIN contacts pc ON d.id = pc.daycare_id AND pc.is_primary = 1
+		-- Left join to get contact count per daycare
+		LEFT JOIN (
+			SELECT daycare_id, COUNT(*) as count
+			FROM contacts
+			GROUP BY daycare_id
+		) cc ON d.id = cc.daycare_id
+		ORDER BY d.stage, d.position
+	`;
+
+	const rows = db.prepare(query).all() as DaycareWithExtrasRow[];
+
+	return rows.map((row): DaycareWithExtras => {
+		// Build the base daycare object
+		const daycare: Daycare = {
+			id: row.id,
+			name: row.name,
+			address: row.address,
+			phone: row.phone,
+			email: row.email,
+			facebook: row.facebook,
+			website: row.website,
+			portal_url: row.portal_url,
+			capacity: row.capacity,
+			price: row.price,
+			hours: row.hours,
+			age_range: row.age_range,
+			rating: row.rating,
+			stage: row.stage,
+			position: row.position,
+			hidden: Boolean(row.hidden),
+			commute_minutes: row.commute_minutes,
+			commute_origin: row.commute_origin,
+			commute_destination: row.commute_destination,
+			commute_maps_url: row.commute_maps_url,
+			commute_calculated_at: row.commute_calculated_at,
+			created_at: row.created_at,
+			updated_at: row.updated_at,
+			installation_id: row.installation_id,
+			daycare_type: row.daycare_type,
+			subventionne: Boolean(row.subventionne),
+			places_poupons: row.places_poupons,
+			places_18_mois_plus: row.places_18_mois_plus,
+			description: row.description,
+			horaires: row.horaires,
+			child_id: row.child_id
+		};
+
+		// Build the first review if present
+		const firstReview: Review | undefined = row.first_review_id
+			? {
+					id: row.first_review_id,
+					daycare_id: row.id,
+					text: row.first_review_text!,
+					source_url: row.first_review_source_url || '',
+					rating: row.first_review_rating!,
+					created_at: row.first_review_created_at!
+				}
+			: undefined;
+
+		// Build the primary contact if present
+		const primaryContact: Contact | undefined = row.primary_contact_id
+			? {
+					id: row.primary_contact_id,
+					daycare_id: row.id,
+					name: row.primary_contact_name!,
+					role: row.primary_contact_role || '',
+					phone: row.primary_contact_phone || '',
+					email: row.primary_contact_email || '',
+					notes: row.primary_contact_notes || '',
+					is_primary: Boolean(row.primary_contact_is_primary),
+					created_at: row.primary_contact_created_at!,
+					updated_at: row.primary_contact_updated_at!
+				}
+			: undefined;
+
+		return {
+			...daycare,
+			firstReview,
+			primaryContact,
+			contactCount: row.contact_count
+		};
+	});
 }
 
 export function getDaycaresByStage(stage: Stage): Daycare[] {
@@ -822,4 +1048,397 @@ export function unclaimDaycare(daycareId: number): void {
 
 export function getDaycaresByOwner(userId: number): Daycare[] {
 	return db.prepare('SELECT * FROM daycares WHERE owner_id = ?').all(userId) as Daycare[];
+}
+
+// Child types
+export interface Child {
+	id: number;
+	name: string;
+	date_of_birth: string;
+	created_at: string;
+}
+
+export interface ChildInput {
+	name: string;
+	date_of_birth: string;
+}
+
+export interface UserChild {
+	id: number;
+	user_id: number;
+	child_id: number;
+	role: 'owner' | 'collaborator';
+	created_at: string;
+}
+
+export interface ChildWithDetails extends Child {
+	is_owner: boolean;
+	parents: { id: number; name: string; email: string; role: string }[];
+}
+
+export interface Invitation {
+	id: number;
+	child_id: number;
+	code: string;
+	created_by_user_id: number;
+	expires_at: string;
+	used_by_user_id: number | null;
+	used_at: string | null;
+	created_at: string;
+}
+
+// Child CRUD operations
+export function createChild(input: ChildInput, userId: number): Child {
+	const result = db.prepare(`
+		INSERT INTO children (name, date_of_birth)
+		VALUES (?, ?)
+	`).run(input.name, input.date_of_birth);
+
+	const childId = result.lastInsertRowid as number;
+
+	// Add user as owner
+	db.prepare(`
+		INSERT INTO user_children (user_id, child_id, role)
+		VALUES (?, ?, 'owner')
+	`).run(userId, childId);
+
+	return getChildById(childId)!;
+}
+
+export function getChildById(id: number): Child | null {
+	return db.prepare('SELECT * FROM children WHERE id = ?').get(id) as Child | null;
+}
+
+export function updateChild(id: number, input: Partial<ChildInput>): Child | null {
+	const existing = getChildById(id);
+	if (!existing) return null;
+
+	const updates: string[] = [];
+	const values: string[] = [];
+
+	if (input.name !== undefined) {
+		updates.push('name = ?');
+		values.push(input.name);
+	}
+	if (input.date_of_birth !== undefined) {
+		updates.push('date_of_birth = ?');
+		values.push(input.date_of_birth);
+	}
+
+	if (updates.length > 0) {
+		values.push(String(id));
+		db.prepare(`UPDATE children SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+	}
+
+	return getChildById(id);
+}
+
+export function deleteChild(id: number): boolean {
+	const result = db.prepare('DELETE FROM children WHERE id = ?').run(id);
+	return result.changes > 0;
+}
+
+// User-Child relationship operations
+export function getChildrenByUserId(userId: number): ChildWithDetails[] {
+	const rows = db.prepare(`
+		SELECT c.*, uc.role as user_role
+		FROM children c
+		JOIN user_children uc ON c.id = uc.child_id
+		WHERE uc.user_id = ?
+		ORDER BY c.created_at ASC
+	`).all(userId) as (Child & { user_role: string })[];
+
+	return rows.map(row => {
+		const parents = getParentsByChildId(row.id);
+		return {
+			id: row.id,
+			name: row.name,
+			date_of_birth: row.date_of_birth,
+			created_at: row.created_at,
+			is_owner: row.user_role === 'owner',
+			parents
+		};
+	});
+}
+
+export function getParentsByChildId(childId: number): { id: number; name: string; email: string; role: string }[] {
+	return db.prepare(`
+		SELECT u.id, u.name, u.email, uc.role
+		FROM users u
+		JOIN user_children uc ON u.id = uc.user_id
+		WHERE uc.child_id = ?
+		ORDER BY uc.role ASC, uc.created_at ASC
+	`).all(childId) as { id: number; name: string; email: string; role: string }[];
+}
+
+export function addUserToChild(userId: number, childId: number, role: 'owner' | 'collaborator'): UserChild | null {
+	try {
+		const result = db.prepare(`
+			INSERT INTO user_children (user_id, child_id, role)
+			VALUES (?, ?, ?)
+		`).run(userId, childId, role);
+
+		return db.prepare('SELECT * FROM user_children WHERE id = ?').get(result.lastInsertRowid) as UserChild;
+	} catch {
+		// Unique constraint violation - user already linked to child
+		return null;
+	}
+}
+
+export function removeUserFromChild(userId: number, childId: number): boolean {
+	const result = db.prepare('DELETE FROM user_children WHERE user_id = ? AND child_id = ?').run(userId, childId);
+	return result.changes > 0;
+}
+
+export function canUserAccessChild(userId: number, childId: number): boolean {
+	const result = db.prepare(`
+		SELECT 1 FROM user_children WHERE user_id = ? AND child_id = ?
+	`).get(userId, childId);
+	return !!result;
+}
+
+export function getUserRoleForChild(userId: number, childId: number): 'owner' | 'collaborator' | null {
+	const result = db.prepare(`
+		SELECT role FROM user_children WHERE user_id = ? AND child_id = ?
+	`).get(userId, childId) as { role: string } | undefined;
+	return result?.role as 'owner' | 'collaborator' | null;
+}
+
+// Invitation operations
+function generateInvitationCode(): string {
+	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No 0/O, 1/I/L for readability
+	let code = '';
+	for (let i = 0; i < 8; i++) {
+		code += chars[Math.floor(Math.random() * chars.length)];
+	}
+	return code;
+}
+
+export function createInvitation(childId: number, userId: number): Invitation {
+	// Revoke any existing active invitation for this child
+	db.prepare(`
+		DELETE FROM invitations
+		WHERE child_id = ? AND used_by_user_id IS NULL
+	`).run(childId);
+
+	const code = generateInvitationCode();
+	const expiresAt = new Date();
+	expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+
+	const result = db.prepare(`
+		INSERT INTO invitations (child_id, code, created_by_user_id, expires_at)
+		VALUES (?, ?, ?, ?)
+	`).run(childId, code, userId, expiresAt.toISOString());
+
+	return db.prepare('SELECT * FROM invitations WHERE id = ?').get(result.lastInsertRowid) as Invitation;
+}
+
+export function getInvitationByCode(code: string): (Invitation & { child: Child }) | null {
+	const invitation = db.prepare(`
+		SELECT * FROM invitations WHERE code = ?
+	`).get(code) as Invitation | undefined;
+
+	if (!invitation) return null;
+
+	const child = getChildById(invitation.child_id);
+	if (!child) return null;
+
+	return { ...invitation, child };
+}
+
+export function getActiveInvitationByChildId(childId: number): Invitation | null {
+	return db.prepare(`
+		SELECT * FROM invitations
+		WHERE child_id = ? AND used_by_user_id IS NULL AND expires_at > datetime('now')
+		ORDER BY created_at DESC
+		LIMIT 1
+	`).get(childId) as Invitation | null;
+}
+
+export function claimInvitation(code: string, userId: number): { success: boolean; error?: string; childId?: number } {
+	const invitation = db.prepare(`
+		SELECT * FROM invitations WHERE code = ?
+	`).get(code) as Invitation | undefined;
+
+	if (!invitation) {
+		return { success: false, error: 'Invalid invitation code' };
+	}
+
+	if (invitation.used_by_user_id) {
+		return { success: false, error: 'Invitation has already been used' };
+	}
+
+	if (new Date(invitation.expires_at) < new Date()) {
+		return { success: false, error: 'Invitation has expired' };
+	}
+
+	// Check if user already has access to this child
+	if (canUserAccessChild(userId, invitation.child_id)) {
+		return { success: false, error: 'You already have access to this child profile' };
+	}
+
+	// Add user as collaborator
+	db.transaction(() => {
+		addUserToChild(userId, invitation.child_id, 'collaborator');
+		db.prepare(`
+			UPDATE invitations
+			SET used_by_user_id = ?, used_at = datetime('now')
+			WHERE id = ?
+		`).run(userId, invitation.id);
+	})();
+
+	return { success: true, childId: invitation.child_id };
+}
+
+export function revokeInvitation(invitationId: number): boolean {
+	const result = db.prepare('DELETE FROM invitations WHERE id = ?').run(invitationId);
+	return result.changes > 0;
+}
+
+// Child-scoped daycare operations
+export function getAllDaycaresByChildId(childId: number): Daycare[] {
+	return db.prepare('SELECT * FROM daycares WHERE child_id = ? ORDER BY stage, position').all(childId) as Daycare[];
+}
+
+/**
+ * Fetches all daycares for a specific child with their first review, primary contact,
+ * and contact count in a single optimized query using JOINs and subqueries.
+ * This is the child-scoped version of getAllDaycaresWithExtras().
+ *
+ * Query count: 1 (instead of 3N+1)
+ */
+export function getAllDaycaresByChildIdWithExtras(childId: number): DaycareWithExtras[] {
+	const query = `
+		SELECT
+			d.*,
+			-- First review (most recent)
+			fr.id as first_review_id,
+			fr.text as first_review_text,
+			fr.source_url as first_review_source_url,
+			fr.rating as first_review_rating,
+			fr.created_at as first_review_created_at,
+			-- Primary contact
+			pc.id as primary_contact_id,
+			pc.name as primary_contact_name,
+			pc.role as primary_contact_role,
+			pc.phone as primary_contact_phone,
+			pc.email as primary_contact_email,
+			pc.notes as primary_contact_notes,
+			pc.is_primary as primary_contact_is_primary,
+			pc.created_at as primary_contact_created_at,
+			pc.updated_at as primary_contact_updated_at,
+			-- Contact count
+			COALESCE(cc.count, 0) as contact_count
+		FROM daycares d
+		-- Left join to get the first (most recent) review per daycare
+		LEFT JOIN (
+			SELECT r1.*
+			FROM reviews r1
+			INNER JOIN (
+				SELECT daycare_id, MAX(created_at) as max_created_at
+				FROM reviews
+				GROUP BY daycare_id
+			) r2 ON r1.daycare_id = r2.daycare_id AND r1.created_at = r2.max_created_at
+		) fr ON d.id = fr.daycare_id
+		-- Left join to get the primary contact per daycare
+		LEFT JOIN contacts pc ON d.id = pc.daycare_id AND pc.is_primary = 1
+		-- Left join to get contact count per daycare
+		LEFT JOIN (
+			SELECT daycare_id, COUNT(*) as count
+			FROM contacts
+			GROUP BY daycare_id
+		) cc ON d.id = cc.daycare_id
+		WHERE d.child_id = ?
+		ORDER BY d.stage, d.position
+	`;
+
+	const rows = db.prepare(query).all(childId) as DaycareWithExtrasRow[];
+
+	return rows.map((row): DaycareWithExtras => {
+		// Build the base daycare object
+		const daycare: Daycare = {
+			id: row.id,
+			name: row.name,
+			address: row.address,
+			phone: row.phone,
+			email: row.email,
+			facebook: row.facebook,
+			website: row.website,
+			portal_url: row.portal_url,
+			capacity: row.capacity,
+			price: row.price,
+			hours: row.hours,
+			age_range: row.age_range,
+			rating: row.rating,
+			stage: row.stage,
+			position: row.position,
+			hidden: Boolean(row.hidden),
+			commute_minutes: row.commute_minutes,
+			commute_origin: row.commute_origin,
+			commute_destination: row.commute_destination,
+			commute_maps_url: row.commute_maps_url,
+			commute_calculated_at: row.commute_calculated_at,
+			created_at: row.created_at,
+			updated_at: row.updated_at,
+			installation_id: row.installation_id,
+			daycare_type: row.daycare_type,
+			subventionne: Boolean(row.subventionne),
+			places_poupons: row.places_poupons,
+			places_18_mois_plus: row.places_18_mois_plus,
+			description: row.description,
+			horaires: row.horaires,
+			child_id: row.child_id
+		};
+
+		// Build the first review if present
+		const firstReview: Review | undefined = row.first_review_id
+			? {
+					id: row.first_review_id,
+					daycare_id: row.id,
+					text: row.first_review_text!,
+					source_url: row.first_review_source_url || '',
+					rating: row.first_review_rating!,
+					created_at: row.first_review_created_at!
+				}
+			: undefined;
+
+		// Build the primary contact if present
+		const primaryContact: Contact | undefined = row.primary_contact_id
+			? {
+					id: row.primary_contact_id,
+					daycare_id: row.id,
+					name: row.primary_contact_name!,
+					role: row.primary_contact_role || '',
+					phone: row.primary_contact_phone || '',
+					email: row.primary_contact_email || '',
+					notes: row.primary_contact_notes || '',
+					is_primary: Boolean(row.primary_contact_is_primary),
+					created_at: row.primary_contact_created_at!,
+					updated_at: row.primary_contact_updated_at!
+				}
+			: undefined;
+
+		return {
+			...daycare,
+			firstReview,
+			primaryContact,
+			contactCount: row.contact_count
+		};
+	});
+}
+
+export function getDaycaresByStageAndChild(stage: Stage, childId: number): Daycare[] {
+	return db.prepare(`
+		SELECT * FROM daycares WHERE stage = ? AND child_id = ? ORDER BY position
+	`).all(stage, childId) as Daycare[];
+}
+
+export function getUnassignedDaycareCount(): number {
+	const result = db.prepare('SELECT COUNT(*) as count FROM daycares WHERE child_id IS NULL').get() as { count: number };
+	return result.count;
+}
+
+export function assignDaycaresToChild(childId: number): number {
+	const result = db.prepare('UPDATE daycares SET child_id = ? WHERE child_id IS NULL').run(childId);
+	return result.changes;
 }

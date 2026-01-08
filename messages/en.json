@@ -184,5 +184,19 @@
 
   "label_subsidized": "Subsidized",
   "subsidized_yes": "Subsidized",
-  "subsidized_no": "Not subsidized"
+  "subsidized_no": "Not subsidized",
+
+  "landing_headline": "Find the Perfect Daycare for Your Family",
+  "landing_subtitle": "Track, compare, and organize your daycare search with our simple Kanban-style board. Keep notes, contacts, and reviews all in one place.",
+  "landing_feature_kanban_title": "Visual Tracking",
+  "landing_feature_kanban_desc": "Move daycares through stages from research to decision with drag-and-drop ease",
+  "landing_feature_notes_title": "Notes & Contacts",
+  "landing_feature_notes_desc": "Keep detailed notes and contact information for each daycare",
+  "landing_feature_reviews_title": "Reviews & Ratings",
+  "landing_feature_reviews_desc": "Add your own reviews and ratings to remember your impressions",
+  "landing_feature_commute_title": "Commute Times",
+  "landing_feature_commute_desc": "Calculate driving times from your home to help narrow down your choices",
+  "landing_cta_signup": "Get Started",
+  "landing_cta_login": "Sign In",
+  "landing_already_member": "Already have an account?"
 }

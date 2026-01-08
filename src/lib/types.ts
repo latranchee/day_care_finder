@@ -30,6 +30,8 @@ export interface Daycare {
 	places_18_mois_plus: number | null;
 	description: string;
 	horaires: string;
+	// Child association
+	child_id: number | null;
 }
 
 export interface Note {
@@ -124,6 +126,8 @@ export interface DaycareInput {
 	places_18_mois_plus?: number | null;
 	description?: string;
 	horaires?: string;
+	// Child association
+	child_id?: number;
 }
 
 // Extended daycare type with related data for display
@@ -157,4 +161,34 @@ export interface FilterSettings {
 	requireEmail: boolean;
 	requireWebsite: boolean;
 	requireFacebook: boolean;
+}
+
+// Child profiles for multi-child support
+export interface Child {
+	id: number;
+	name: string;
+	date_of_birth: string;
+	created_at: string;
+}
+
+export interface ChildInput {
+	name: string;
+	date_of_birth: string;
+}
+
+export interface ChildWithDetails extends Child {
+	is_owner: boolean;
+	parents: { id: number; name: string; email: string; role: string }[];
+}
+
+// Invitation for sharing child profiles
+export interface Invitation {
+	id: number;
+	child_id: number;
+	code: string;
+	created_by_user_id: number;
+	expires_at: string;
+	used_by_user_id: number | null;
+	used_at: string | null;
+	created_at: string;
 }
