@@ -6,6 +6,25 @@
 	import DaycareModal from '$lib/components/DaycareModal.svelte';
 	import ImportCSV from '$lib/components/ImportCSV.svelte';
 	import AddDaycare from '$lib/components/AddDaycare.svelte';
+	import * as m from '$lib/paraglide/messages.js';
+	import { getLocale, setLocale, locales } from '$lib/paraglide/runtime.js';
+
+	function switchLanguage(locale: string) {
+		setLocale(locale as 'en' | 'fr');
+	}
+
+	// Get translated stage label
+	function getStageLabel(stageId: Stage): string {
+		const labels: Record<Stage, () => string> = {
+			to_research: m.stage_to_research,
+			to_contact: m.stage_to_contact,
+			contacted: m.stage_contacted,
+			visited: m.stage_visited,
+			waitlisted: m.stage_waitlisted,
+			decision_made: m.stage_decision_made
+		};
+		return labels[stageId]();
+	}
 
 	type DaycareWithExtras = Daycare & { firstReview?: Review; primaryContact?: Contact; contactCount: number };
 
@@ -15,12 +34,59 @@
 
 	let { data }: Props = $props();
 
+	// Create stages with translated labels
+	const translatedStages = $derived(
+		data.stages.map(stage => ({
+			id: stage.id,
+			label: getStageLabel(stage.id)
+		}))
+	);
+
 	let columns = $state<Record<Stage, DaycareWithExtras[]>>(structuredClone(data.columns));
 	let selectedDaycare = $state<Daycare | null>(null);
 	let showImport = $state(false);
 	let showAddDaycare = $state(false);
 	let showHidden = $state(false);
+	let showSettings = $state(false);
 	let saveError = $state<string | null>(null);
+	let homeAddress = $state('');
+	let isCalculatingCommutes = $state(false);
+	let commuteStatus = $state<string | null>(null);
+
+	// Card display settings - load from localStorage
+	const defaultCardSettings = {
+		showAddress: true,
+		showPhone: true,
+		showEmail: true,
+		showPrice: true,
+		showAgeRange: true,
+		showFacebook: true,
+		showContacts: true,
+		showReview: true,
+		showCommuteTime: true
+	};
+
+	function loadCardSettings() {
+		if (typeof window === 'undefined') return defaultCardSettings;
+		const saved = localStorage.getItem('cardSettings');
+		if (saved) {
+			try {
+				return { ...defaultCardSettings, ...JSON.parse(saved) };
+			} catch {
+				return defaultCardSettings;
+			}
+		}
+		return defaultCardSettings;
+	}
+
+	let cardSettings = $state(loadCardSettings());
+
+	// Save settings to localStorage when they change
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('cardSettings', JSON.stringify(cardSettings));
+		}
+	});
 
 	// Only sync from server on initial load or explicit refresh (not after every change)
 	let lastDataVersion = $state(JSON.stringify(data.columns));
@@ -59,7 +125,7 @@
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ stage, position: newPosition })
 				}).catch(() => {
-					saveError = 'Failed to save position. Please refresh.';
+					saveError = m.error_save_position();
 					setTimeout(() => saveError = null, 5000);
 				});
 			}
@@ -171,10 +237,82 @@
 	function handleReviewsChange() {
 		invalidateAll();
 	}
+
+	// Load home address from server settings on mount
+	async function loadSettings() {
+		try {
+			const res = await fetch('/api/settings');
+			if (res.ok) {
+				const settings = await res.json();
+				if (settings.home_address) {
+					homeAddress = settings.home_address;
+				}
+			}
+		} catch (err) {
+			console.error('Failed to load settings:', err);
+		}
+	}
+
+	// Save home address to server
+	async function saveHomeAddress() {
+		try {
+			await fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ home_address: homeAddress })
+			});
+		} catch (err) {
+			console.error('Failed to save home address:', err);
+		}
+	}
+
+	// Calculate commute times for all daycares
+	async function calculateCommutes() {
+		if (!homeAddress.trim()) {
+			commuteStatus = 'Please enter your home address first';
+			setTimeout(() => commuteStatus = null, 3000);
+			return;
+		}
+
+		isCalculatingCommutes = true;
+		commuteStatus = 'Calculating commute times...';
+
+		try {
+			// Save the home address first
+			await saveHomeAddress();
+
+			const res = await fetch('/api/commute', { method: 'POST' });
+			const result = await res.json();
+
+			if (res.ok) {
+				if (result.calculated > 0) {
+					commuteStatus = `Calculated ${result.calculated} commute${result.calculated > 1 ? 's' : ''}`;
+					invalidateAll();
+				} else if (result.errors?.length > 0) {
+					commuteStatus = `${result.errors.length} error(s) occurred`;
+				} else {
+					commuteStatus = 'All commutes are up to date';
+				}
+			} else {
+				commuteStatus = result.error || 'Failed to calculate commutes';
+			}
+		} catch (err) {
+			commuteStatus = 'Failed to calculate commutes';
+			console.error('Failed to calculate commutes:', err);
+		} finally {
+			isCalculatingCommutes = false;
+			setTimeout(() => commuteStatus = null, 5000);
+		}
+	}
+
+	// Load settings on mount
+	$effect(() => {
+		loadSettings();
+	});
 </script>
 
 <svelte:head>
-	<title>Daycare Finder</title>
+	<title>{m.app_title()}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet" />
@@ -189,9 +327,9 @@
 		<div class="header-left">
 			<h1 class="app-title">
 				<span class="title-icon">🏠</span>
-				Daycare Finder
+				{m.app_title()}
 			</h1>
-			<span class="daycare-count">{totalDaycares} daycares</span>
+			<span class="daycare-count">{m.daycares_count({ count: totalDaycares })}</span>
 		</div>
 
 		<div class="header-actions">
@@ -210,32 +348,141 @@
 							<line x1="1" y1="1" x2="23" y2="23"/>
 						{/if}
 					</svg>
-					{showHidden ? 'Hide Hidden' : `Show Hidden (${hiddenCount})`}
+					{showHidden ? m.btn_hide_hidden() : m.btn_show_hidden({ count: hiddenCount })}
 				</button>
 			{/if}
+			<div class="settings-container">
+				<button
+					class="btn btn-icon-only"
+					class:active={showSettings}
+					onclick={() => showSettings = !showSettings}
+					title="Card display settings"
+				>
+					<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="3"/>
+						<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+					</svg>
+				</button>
+				{#if showSettings}
+					<div class="settings-dropdown">
+						<div class="settings-section">
+							<div class="settings-header">{m.settings_card_display()}</div>
+							<div class="settings-chips">
+								<label class="chip" class:active={cardSettings.showAddress}>
+									<input type="checkbox" bind:checked={cardSettings.showAddress} />
+									{m.label_address()}
+								</label>
+								<label class="chip" class:active={cardSettings.showPhone}>
+									<input type="checkbox" bind:checked={cardSettings.showPhone} />
+									{m.label_phone()}
+								</label>
+								<label class="chip" class:active={cardSettings.showEmail}>
+									<input type="checkbox" bind:checked={cardSettings.showEmail} />
+									{m.label_email()}
+								</label>
+								<label class="chip" class:active={cardSettings.showPrice}>
+									<input type="checkbox" bind:checked={cardSettings.showPrice} />
+									{m.label_price()}
+								</label>
+								<label class="chip" class:active={cardSettings.showAgeRange}>
+									<input type="checkbox" bind:checked={cardSettings.showAgeRange} />
+									{m.label_age_range()}
+								</label>
+								<label class="chip" class:active={cardSettings.showFacebook}>
+									<input type="checkbox" bind:checked={cardSettings.showFacebook} />
+									{m.label_facebook()}
+								</label>
+								<label class="chip" class:active={cardSettings.showContacts}>
+									<input type="checkbox" bind:checked={cardSettings.showContacts} />
+									{m.section_contacts({ count: 0 }).replace(' (0)', '')}
+								</label>
+								<label class="chip" class:active={cardSettings.showReview}>
+									<input type="checkbox" bind:checked={cardSettings.showReview} />
+									{m.review_preview()}
+								</label>
+								<label class="chip" class:active={cardSettings.showCommuteTime}>
+									<input type="checkbox" bind:checked={cardSettings.showCommuteTime} />
+									Commute
+								</label>
+							</div>
+						</div>
+
+						<div class="settings-section">
+							<div class="settings-header">Commute Settings</div>
+							<div class="settings-field">
+								<label for="home-address">Home Address</label>
+								<input
+									type="text"
+									id="home-address"
+									bind:value={homeAddress}
+									onblur={saveHomeAddress}
+									placeholder="Enter your home address"
+								/>
+							</div>
+							<button
+								class="settings-btn"
+								onclick={calculateCommutes}
+								disabled={isCalculatingCommutes}
+							>
+								{#if isCalculatingCommutes}
+									<svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
+									</svg>
+									Calculating...
+								{:else}
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<circle cx="12" cy="12" r="10"/>
+										<polyline points="12 6 12 12 16 14"/>
+									</svg>
+									Calculate Commutes
+								{/if}
+							</button>
+							{#if commuteStatus}
+								<div class="commute-status">{commuteStatus}</div>
+							{/if}
+						</div>
+
+						<div class="settings-section">
+							<div class="settings-header">{m.settings_language()}</div>
+							<div class="language-toggle">
+								{#each locales as locale}
+									<button
+										class="lang-btn"
+										class:active={getLocale() === locale}
+										onclick={() => switchLanguage(locale)}
+									>
+										{locale === 'en' ? m.lang_en() : m.lang_fr()}
+									</button>
+								{/each}
+							</div>
+						</div>
+					</div>
+				{/if}
+			</div>
 			<button class="btn btn-secondary" onclick={() => showImport = true}>
 				<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
 					<polyline points="17 8 12 3 7 8"/>
 					<line x1="12" y1="3" x2="12" y2="15"/>
 				</svg>
-				Import CSV
+				{m.btn_import_csv()}
 			</button>
 			<button class="btn btn-primary" onclick={() => showAddDaycare = true}>
 				<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<line x1="12" y1="5" x2="12" y2="19"/>
 					<line x1="5" y1="12" x2="19" y2="12"/>
 				</svg>
-				Add Daycare
+				{m.btn_add_daycare()}
 			</button>
 		</div>
 	</header>
 
 	<main class="kanban-board">
-		{#each data.stages as stage (stage.id)}
+		{#each translatedStages as stage (stage.id)}
 			<KanbanColumn
 				{stage}
 				items={getFilteredItems(columns[stage.id])}
+				{cardSettings}
 				onDndConsider={handleDndConsider(stage.id)}
 				onDndFinalize={handleDndFinalize(stage.id)}
 				onSelectDaycare={handleSelectDaycare}
@@ -400,6 +647,202 @@
 	.btn-secondary.active {
 		background: #d8cfc4;
 		color: #3d3425;
+	}
+
+	.btn-icon-only {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.625rem;
+		border: none;
+		border-radius: 10px;
+		background: #f0ebe4;
+		color: #5a4d3d;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.btn-icon-only:hover {
+		background: #e8e2d9;
+	}
+
+	.btn-icon-only.active {
+		background: #d8cfc4;
+		color: #3d3425;
+	}
+
+	.settings-container {
+		position: relative;
+	}
+
+	.settings-dropdown {
+		position: absolute;
+		top: 100%;
+		right: 0;
+		margin-top: 0.5rem;
+		background: white;
+		border: 1px solid #e8dfd3;
+		border-radius: 16px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+		width: 320px;
+		z-index: 100;
+		overflow: hidden;
+	}
+
+	.settings-section {
+		padding: 1rem 1.25rem;
+		border-bottom: 1px solid #f0ebe4;
+	}
+
+	.settings-section:last-child {
+		border-bottom: none;
+	}
+
+	.settings-header {
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: #7a6d5c;
+		margin-bottom: 0.75rem;
+	}
+
+	.settings-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.375rem 0.75rem;
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: #5a4d3d;
+		background: #f5f1eb;
+		border: 1px solid #e8dfd3;
+		border-radius: 999px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		user-select: none;
+	}
+
+	.chip:hover {
+		background: #ebe5db;
+		border-color: #d8cfc4;
+	}
+
+	.chip.active {
+		background: #c47a4e;
+		border-color: #c47a4e;
+		color: white;
+	}
+
+	.chip input[type="checkbox"] {
+		display: none;
+	}
+
+	.settings-field {
+		margin-bottom: 0.75rem;
+	}
+
+	.settings-field label {
+		display: block;
+		font-size: 0.75rem;
+		color: #7a6d5c;
+		margin-bottom: 0.375rem;
+	}
+
+	.settings-field input[type="text"] {
+		width: 100%;
+		padding: 0.625rem 0.75rem;
+		border: 1px solid #e8dfd3;
+		border-radius: 8px;
+		font-size: 0.875rem;
+		background: #fafafa;
+	}
+
+	.settings-field input[type="text"]:focus {
+		outline: none;
+		border-color: #c47a4e;
+		background: white;
+	}
+
+	.settings-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.625rem;
+		background: #c47a4e;
+		color: white;
+		border: none;
+		border-radius: 8px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+
+	.settings-btn:hover:not(:disabled) {
+		background: #b36a42;
+	}
+
+	.settings-btn:disabled {
+		background: #d8cfc4;
+		cursor: not-allowed;
+	}
+
+	.settings-btn svg {
+		width: 16px;
+		height: 16px;
+	}
+
+	.settings-btn .spinner {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from { transform: rotate(0deg); }
+		to { transform: rotate(360deg); }
+	}
+
+	.commute-status {
+		font-size: 0.75rem;
+		color: #7a6d5c;
+		text-align: center;
+		margin-top: 0.5rem;
+	}
+
+	.language-toggle {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem 0.75rem;
+	}
+
+	.lang-btn {
+		flex: 1;
+		padding: 0.5rem;
+		border: 1px solid #e8dfd3;
+		border-radius: 6px;
+		background: white;
+		color: #5a4d3d;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.lang-btn:hover {
+		border-color: #c47a4e;
+	}
+
+	.lang-btn.active {
+		background: #c47a4e;
+		border-color: #c47a4e;
+		color: white;
 	}
 
 	.kanban-board {

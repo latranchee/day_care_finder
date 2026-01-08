@@ -41,6 +41,9 @@ export const POST: RequestHandler = async ({ request }) => {
 				case 'website':
 					daycare.website = value;
 					break;
+				case 'facebook':
+					daycare.facebook = value;
+					break;
 				case 'capacity':
 					daycare.capacity = value ? parseInt(value) || null : null;
 					break;

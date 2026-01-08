@@ -1,4 +1,6 @@
 <script lang="ts">
+	import * as m from '$lib/paraglide/messages.js';
+
 	interface Props {
 		onImport: () => void;
 		onClose: () => void;
@@ -14,7 +16,7 @@
 
 	async function handleFile(file: File) {
 		if (!file.name.endsWith('.csv')) {
-			error = 'Please select a CSV file';
+			error = m.import_csv_error();
 			return;
 		}
 
@@ -34,13 +36,13 @@
 			const data = await res.json();
 
 			if (res.ok) {
-				success = `Successfully imported ${data.imported} daycares!`;
+				success = m.import_success({ count: data.imported });
 				onImport();
 			} else {
-				error = data.error || 'Import failed';
+				error = data.error || m.import_failed();
 			}
 		} catch (e) {
-			error = 'Failed to import file';
+			error = m.import_failed_generic();
 		}
 
 		importing = false;
@@ -62,14 +64,14 @@
 
 <div class="import-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()} role="presentation">
 	<div class="import-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
-		<button class="modal-close" onclick={onClose} aria-label="Close">
+		<button class="modal-close" onclick={onClose} aria-label={m.close()}>
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<path d="M18 6L6 18M6 6l12 12" />
 			</svg>
 		</button>
 
-		<h2 class="import-title">Import Daycares</h2>
-		<p class="import-subtitle">Upload a CSV file with your daycare list</p>
+		<h2 class="import-title">{m.modal_import()}</h2>
+		<p class="import-subtitle">{m.modal_import_subtitle()}</p>
 
 		<div
 			class="drop-zone"
@@ -93,14 +95,14 @@
 
 			{#if importing}
 				<div class="spinner"></div>
-				<p>Importing...</p>
+				<p>{m.import_importing()}</p>
 			{:else}
 				<svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
 					<polyline points="17 8 12 3 7 8"/>
 					<line x1="12" y1="3" x2="12" y2="15"/>
 				</svg>
-				<p class="drop-text">Drop CSV file here or click to browse</p>
+				<p class="drop-text">{m.import_drop_text()}</p>
 			{/if}
 		</div>
 
@@ -113,12 +115,12 @@
 		{/if}
 
 		<div class="format-info">
-			<h3>Expected CSV Format</h3>
+			<h3>{m.import_format_title()}</h3>
 			<code class="format-example">
-name,address,phone,website,capacity,price,hours,age_range,rating
-Happy Kids,123 Main St,555-1234,https://example.com,50,$1200/mo,7am-6pm,6mo-5yr,4.5
+name,address,phone,facebook,website,capacity,price,hours,age_range,rating
+Happy Kids,123 Main St,555-1234,https://facebook.com/happykids,https://example.com,50,$1200/mo,7am-6pm,6mo-5yr,4.5
 			</code>
-			<p class="format-note">Only the <strong>name</strong> column is required. All other fields are optional.</p>
+			<p class="format-note">{@html m.import_format_note()}</p>
 		</div>
 	</div>
 </div>

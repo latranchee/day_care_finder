@@ -1,16 +1,30 @@
 <script lang="ts">
 	import type { Daycare, Review, Contact } from '$lib/types';
+	import * as m from '$lib/paraglide/messages.js';
+
+	interface CardSettings {
+		showAddress: boolean;
+		showPhone: boolean;
+		showEmail: boolean;
+		showPrice: boolean;
+		showAgeRange: boolean;
+		showFacebook: boolean;
+		showContacts: boolean;
+		showReview: boolean;
+		showCommuteTime: boolean;
+	}
 
 	interface Props {
 		daycare: Daycare;
 		firstReview?: Review | null;
 		primaryContact?: Contact | null;
 		contactCount?: number;
+		cardSettings: CardSettings;
 		onSelect: (daycare: Daycare) => void;
 		onHide?: (id: number) => void;
 	}
 
-	let { daycare, firstReview = null, primaryContact = null, contactCount = 0, onSelect, onHide }: Props = $props();
+	let { daycare, firstReview = null, primaryContact = null, contactCount = 0, cardSettings, onSelect, onHide }: Props = $props();
 
 	function formatRating(rating: number | null): string {
 		if (rating === null) return '—';
@@ -41,7 +55,7 @@
 			class="hide-btn"
 			onclick={handleHide}
 			type="button"
-			title={daycare.hidden ? 'Show card' : 'Hide card'}
+			title={daycare.hidden ? m.card_show() : m.card_hide()}
 		>
 			{#if daycare.hidden}
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -59,13 +73,13 @@
 	<div class="card-header">
 		<h3 class="card-title">{daycare.name}</h3>
 		{#if daycare.rating}
-			<span class="card-rating" title="{daycare.rating} out of 5">
+			<span class="card-rating" title={m.rating_out_of({ rating: daycare.rating })}>
 				{formatRating(daycare.rating)}
 			</span>
 		{/if}
 	</div>
 
-	{#if daycare.address}
+	{#if cardSettings.showAddress && daycare.address}
 		<p class="card-address">
 			<svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -76,27 +90,44 @@
 	{/if}
 
 	<div class="card-meta">
-		{#if daycare.price}
+		{#if cardSettings.showPrice && daycare.price}
 			<span class="meta-tag price">{daycare.price}</span>
 		{/if}
-		{#if daycare.age_range}
+		{#if cardSettings.showAgeRange && daycare.age_range}
 			<span class="meta-tag age">{daycare.age_range}</span>
 		{/if}
-		{#if daycare.email}
-			<span class="meta-tag email" title={daycare.email}>
+		{#if cardSettings.showPhone && daycare.phone}
+			<a
+				href="tel:{daycare.phone}"
+				class="meta-tag phone"
+				onclick={(e) => e.stopPropagation()}
+			>
+				<svg class="phone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+				</svg>
+				{daycare.phone}
+			</a>
+		{/if}
+		{#if cardSettings.showEmail && daycare.email}
+			<a
+				href="mailto:{daycare.email}"
+				class="meta-tag email"
+				onclick={(e) => e.stopPropagation()}
+			>
 				<svg class="email-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
 					<polyline points="22,6 12,13 2,6"/>
 				</svg>
-			</span>
+				{daycare.email}
+			</a>
 		{/if}
-		{#if daycare.facebook}
+		{#if cardSettings.showFacebook && daycare.facebook}
 			<a
 				href={daycare.facebook}
 				target="_blank"
 				rel="noopener"
 				class="meta-tag facebook"
-				title="View Facebook page"
+				title={m.view_facebook()}
 				onclick={(e) => e.stopPropagation()}
 			>
 				<svg class="facebook-icon" viewBox="0 0 24 24" fill="currentColor">
@@ -104,10 +135,10 @@
 				</svg>
 			</a>
 		{/if}
-		{#if contactCount > 0}
+		{#if cardSettings.showContacts && contactCount > 0}
 			<span
 				class="meta-tag contacts"
-				title={primaryContact ? `${primaryContact.name}${primaryContact.role ? ` (${primaryContact.role})` : ''}` : `${contactCount} contact${contactCount > 1 ? 's' : ''}`}
+				title={primaryContact ? `${primaryContact.name}${primaryContact.role ? ` (${primaryContact.role})` : ''}` : (contactCount > 1 ? m.contact_count_plural({ count: contactCount }) : m.contact_count({ count: contactCount }))}
 			>
 				<svg class="contacts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -118,9 +149,18 @@
 				{contactCount}
 			</span>
 		{/if}
+		{#if cardSettings.showCommuteTime && daycare.commute_minutes !== null}
+			<span class="meta-tag commute" title="Commute time from home">
+				<svg class="commute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="12" cy="12" r="10"/>
+					<polyline points="12 6 12 12 16 14"/>
+				</svg>
+				{daycare.commute_minutes} min
+			</span>
+		{/if}
 	</div>
 
-	{#if firstReview}
+	{#if cardSettings.showReview && firstReview}
 		<div class="review-preview">
 			<div class="review-header">
 				<span class="review-rating">{'★'.repeat(firstReview.rating)}{'☆'.repeat(5 - firstReview.rating)}</span>
@@ -132,7 +172,7 @@
 						class="review-source"
 						onclick={(e) => e.stopPropagation()}
 					>
-						Source
+						{m.source()}
 					</a>
 				{/if}
 			</div>
@@ -261,17 +301,42 @@
 		color: #4a5f4a;
 	}
 
+	.meta-tag.phone {
+		background: #e8f0e8;
+		color: #4a6a5a;
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		text-decoration: none;
+	}
+
+	.meta-tag.phone:hover {
+		background: #d8e8d8;
+	}
+
+	.phone-icon {
+		width: 12px;
+		height: 12px;
+		flex-shrink: 0;
+	}
+
 	.meta-tag.email {
 		background: #e8eaf0;
 		color: #4a5a6a;
-		padding: 0.25rem;
 		display: flex;
 		align-items: center;
+		gap: 0.25rem;
+		text-decoration: none;
+	}
+
+	.meta-tag.email:hover {
+		background: #d8dae8;
 	}
 
 	.email-icon {
 		width: 12px;
 		height: 12px;
+		flex-shrink: 0;
 	}
 
 	.meta-tag.facebook {
@@ -301,6 +366,19 @@
 	}
 
 	.contacts-icon {
+		width: 12px;
+		height: 12px;
+	}
+
+	.meta-tag.commute {
+		background: #f0e8f4;
+		color: #6a4a7a;
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.commute-icon {
 		width: 12px;
 		height: 12px;
 	}

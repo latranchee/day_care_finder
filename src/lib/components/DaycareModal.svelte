@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Daycare, Note, Review, Contact, ContactInput, DaycareInput } from '$lib/types';
 	import Markdown from './Markdown.svelte';
+	import * as m from '$lib/paraglide/messages.js';
+	import { getLocale } from '$lib/paraglide/runtime.js';
 
 	interface Props {
 		daycare: Daycare | null;
@@ -250,7 +252,8 @@
 	}
 
 	function formatDate(dateStr: string): string {
-		return new Date(dateStr).toLocaleDateString('en-US', {
+		const locale = getLocale() === 'fr' ? 'fr-CA' : 'en-US';
+		return new Date(dateStr).toLocaleDateString(locale, {
 			month: 'short',
 			day: 'numeric',
 			hour: 'numeric',
@@ -295,153 +298,160 @@
 					{#if isEditing}
 						<form class="edit-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
 							<div class="form-group">
-								<label for="name">Name</label>
+								<label for="name">{m.label_name()}</label>
 								<input id="name" type="text" bind:value={editForm.name} required />
 							</div>
 
 							<div class="form-group">
-								<label for="address">Address</label>
+								<label for="address">{m.label_address()}</label>
 								<input id="address" type="text" bind:value={editForm.address} />
 							</div>
 
 							<div class="form-row">
 								<div class="form-group">
-									<label for="phone">Phone</label>
+									<label for="phone">{m.label_phone()}</label>
 									<input id="phone" type="tel" bind:value={editForm.phone} />
 								</div>
 								<div class="form-group">
-									<label for="email">Email</label>
+									<label for="email">{m.label_email()}</label>
 									<input id="email" type="email" bind:value={editForm.email} />
 								</div>
 							</div>
 
 							<div class="form-group">
-								<label for="website">Website</label>
+								<label for="website">{m.label_website()}</label>
 								<input id="website" type="url" bind:value={editForm.website} />
 							</div>
 
 							<div class="form-group">
-								<label for="facebook">Facebook</label>
-								<input id="facebook" type="url" bind:value={editForm.facebook} placeholder="https://facebook.com/..." />
+								<label for="facebook">{m.label_facebook()}</label>
+								<input id="facebook" type="url" bind:value={editForm.facebook} placeholder={m.placeholder_facebook()} />
 							</div>
 
 							<div class="form-row">
 								<div class="form-group">
-									<label for="price">Price</label>
-									<input id="price" type="text" bind:value={editForm.price} placeholder="e.g., $1,200/mo" />
+									<label for="price">{m.label_price()}</label>
+									<input id="price" type="text" bind:value={editForm.price} placeholder={m.placeholder_price()} />
 								</div>
 								<div class="form-group">
-									<label for="capacity">Capacity</label>
+									<label for="capacity">{m.label_capacity()}</label>
 									<input id="capacity" type="number" bind:value={editForm.capacity} />
 								</div>
 							</div>
 
 							<div class="form-row">
 								<div class="form-group">
-									<label for="hours">Hours</label>
-									<input id="hours" type="text" bind:value={editForm.hours} placeholder="e.g., 7am-6pm" />
+									<label for="hours">{m.label_hours()}</label>
+									<input id="hours" type="text" bind:value={editForm.hours} placeholder={m.placeholder_hours()} />
 								</div>
 								<div class="form-group">
-									<label for="age_range">Age Range</label>
-									<input id="age_range" type="text" bind:value={editForm.age_range} placeholder="e.g., 6mo-5yr" />
+									<label for="age_range">{m.label_age_range()}</label>
+									<input id="age_range" type="text" bind:value={editForm.age_range} placeholder={m.placeholder_age_range()} />
 								</div>
 							</div>
 
 							<div class="form-actions">
 								<button type="button" class="btn btn-secondary" onclick={() => isEditing = false}>
-									Cancel
+									{m.btn_cancel()}
 								</button>
-								<button type="submit" class="btn btn-primary">Save Changes</button>
+								<button type="submit" class="btn btn-primary">{m.btn_save()}</button>
 							</div>
 						</form>
 					{:else}
 						<div class="daycare-details">
-							<h2 class="daycare-name">{daycare.name}</h2>
+							<div class="details-content">
+								<h2 class="daycare-name">{daycare.name}</h2>
 
-							{#if daycare.rating}
-								<div class="rating-display">
-									{#each Array(5) as _, i}
-										<span class="star" class:filled={i < Math.round(daycare.rating)}>★</span>
-									{/each}
-									<span class="rating-value">({daycare.rating})</span>
+								{#if daycare.rating}
+									<div class="rating-display">
+										{#each Array(5) as _, i}
+											<span class="star" class:filled={i < Math.round(daycare.rating)}>★</span>
+										{/each}
+										<span class="rating-value">({daycare.rating})</span>
+									</div>
+								{/if}
+
+								<!-- Quick action icons -->
+								{#if daycare.phone || daycare.email || daycare.website || daycare.facebook}
+									<div class="quick-links">
+										{#if daycare.phone}
+											<a href="tel:{daycare.phone}" class="quick-link" title={daycare.phone}>
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+												</svg>
+											</a>
+										{/if}
+										{#if daycare.email}
+											<a href="mailto:{daycare.email}" class="quick-link" title={daycare.email}>
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+													<polyline points="22,6 12,13 2,6"/>
+												</svg>
+											</a>
+										{/if}
+										{#if daycare.website}
+											<a href={daycare.website} target="_blank" rel="noopener" class="quick-link" title={daycare.website}>
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<circle cx="12" cy="12" r="10"/>
+													<line x1="2" y1="12" x2="22" y2="12"/>
+													<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+												</svg>
+											</a>
+										{/if}
+										{#if daycare.facebook}
+											<a href={daycare.facebook} target="_blank" rel="noopener" class="quick-link" title="Facebook">
+												<svg viewBox="0 0 24 24" fill="currentColor">
+													<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+												</svg>
+											</a>
+										{/if}
+									</div>
+								{/if}
+
+								<div class="info-grid">
+									{#if daycare.address}
+										<div class="info-item wide">
+											<span class="info-label">{m.label_address()}</span>
+											<span class="info-value">{daycare.address}</span>
+										</div>
+									{/if}
+
+									{#if daycare.price}
+										<div class="info-item">
+											<span class="info-label">{m.label_price()}</span>
+											<span class="info-value">{daycare.price}</span>
+										</div>
+									{/if}
+
+									{#if daycare.hours}
+										<div class="info-item">
+											<span class="info-label">{m.label_hours()}</span>
+											<span class="info-value">{daycare.hours}</span>
+										</div>
+									{/if}
+
+									{#if daycare.capacity}
+										<div class="info-item">
+											<span class="info-label">{m.label_capacity()}</span>
+											<span class="info-value">{m.capacity_children({ count: daycare.capacity })}</span>
+										</div>
+									{/if}
+
+									{#if daycare.age_range}
+										<div class="info-item">
+											<span class="info-label">{m.label_ages()}</span>
+											<span class="info-value">{daycare.age_range}</span>
+										</div>
+									{/if}
 								</div>
-							{/if}
-
-							<div class="info-grid">
-								{#if daycare.address}
-									<div class="info-item">
-										<span class="info-label">Address</span>
-										<span class="info-value">{daycare.address}</span>
-									</div>
-								{/if}
-
-								{#if daycare.phone}
-									<div class="info-item">
-										<span class="info-label">Phone</span>
-										<a href="tel:{daycare.phone}" class="info-value link">{daycare.phone}</a>
-									</div>
-								{/if}
-
-								{#if daycare.email}
-									<div class="info-item">
-										<span class="info-label">Email</span>
-										<a href="mailto:{daycare.email}" class="info-value link">{daycare.email}</a>
-									</div>
-								{/if}
-
-								{#if daycare.website}
-									<div class="info-item">
-										<span class="info-label">Website</span>
-										<a href={daycare.website} target="_blank" rel="noopener" class="info-value link">
-											{daycare.website.replace(/^https?:\/\//, '')}
-										</a>
-									</div>
-								{/if}
-
-								{#if daycare.facebook}
-									<div class="info-item">
-										<span class="info-label">Facebook</span>
-										<a href={daycare.facebook} target="_blank" rel="noopener" class="info-value link">
-											{daycare.facebook.replace(/^https?:\/\/(www\.)?/, '')}
-										</a>
-									</div>
-								{/if}
-
-								{#if daycare.price}
-									<div class="info-item">
-										<span class="info-label">Price</span>
-										<span class="info-value">{daycare.price}</span>
-									</div>
-								{/if}
-
-								{#if daycare.hours}
-									<div class="info-item">
-										<span class="info-label">Hours</span>
-										<span class="info-value">{daycare.hours}</span>
-									</div>
-								{/if}
-
-								{#if daycare.capacity}
-									<div class="info-item">
-										<span class="info-label">Capacity</span>
-										<span class="info-value">{daycare.capacity} children</span>
-									</div>
-								{/if}
-
-								{#if daycare.age_range}
-									<div class="info-item">
-										<span class="info-label">Ages</span>
-										<span class="info-value">{daycare.age_range}</span>
-									</div>
-								{/if}
 							</div>
 
 							<div class="detail-actions">
 								<button class="btn btn-secondary" onclick={() => isEditing = true}>
-									Edit Details
+									{m.btn_edit()}
 								</button>
-								<button class="btn btn-danger" onclick={() => { if (confirm('Delete this daycare?')) onDelete(daycare!.id); }}>
-									Delete
+								<button class="btn btn-danger" onclick={() => { if (confirm(m.confirm_delete())) onDelete(daycare!.id); }}>
+									{m.btn_delete()}
 								</button>
 							</div>
 						</div>
@@ -449,19 +459,19 @@
 				</div>
 
 				<div class="modal-sidebar">
-					<h3 class="notes-title">Notes ({notes.length})</h3>
+					<h3 class="notes-title">{m.section_notes({ count: notes.length })}</h3>
 
 					{#if showNoteForm}
 						<div class="note-input">
 							<input
 								type="text"
 								bind:value={noteUsername}
-								placeholder="Your name (optional)"
+								placeholder={m.placeholder_your_name()}
 								class="username-input"
 							/>
 							<textarea
 								bind:value={newNote}
-								placeholder="Add a note..."
+								placeholder={m.placeholder_add_note()}
 								rows="3"
 							></textarea>
 							<div class="note-form-actions">
@@ -469,14 +479,14 @@
 									class="btn btn-secondary btn-sm"
 									onclick={() => { showNoteForm = false; newNote = ''; }}
 								>
-									Cancel
+									{m.btn_cancel()}
 								</button>
 								<button
 									class="btn btn-primary btn-sm"
 									onclick={addNote}
 									disabled={!newNote.trim()}
 								>
-									Add Note
+									{m.btn_add_note()}
 								</button>
 							</div>
 						</div>
@@ -486,15 +496,15 @@
 								<line x1="12" y1="5" x2="12" y2="19"/>
 								<line x1="5" y1="12" x2="19" y2="12"/>
 							</svg>
-							Add Note
+							{m.btn_add_note()}
 						</button>
 					{/if}
 
 					<div class="notes-list">
 						{#if loadingNotes}
-							<p class="notes-loading">Loading notes...</p>
+							<p class="notes-loading">{m.loading_notes()}</p>
 						{:else if notes.length === 0}
-							<p class="notes-empty">No notes yet</p>
+							<p class="notes-empty">{m.empty_notes()}</p>
 						{:else}
 							{#each notes as note (note.id)}
 								<div class="note-item">
@@ -502,13 +512,13 @@
 										{#if isNoteLong(note.content) && !expandedNotes.has(note.id)}
 											<Markdown content={truncateNote(note.content)} />
 											<button class="show-more-btn" onclick={() => toggleNoteExpanded(note.id)}>
-												Show more
+												{m.btn_show_more()}
 											</button>
 										{:else}
 											<Markdown content={note.content} />
 											{#if isNoteLong(note.content)}
 												<button class="show-more-btn" onclick={() => toggleNoteExpanded(note.id)}>
-													Show less
+													{m.btn_show_less()}
 												</button>
 											{/if}
 										{/if}
@@ -533,57 +543,57 @@
 
 					<div class="section-divider"></div>
 
-					<h3 class="contacts-title">Contacts ({contacts.length})</h3>
+					<h3 class="contacts-title">{m.section_contacts({ count: contacts.length })}</h3>
 
 					{#if showContactForm}
 						<div class="contact-input">
 							<input
 								type="text"
 								bind:value={newContact.name}
-								placeholder="Contact name *"
+								placeholder={m.placeholder_contact_name()}
 								class="contact-field"
 							/>
 							<input
 								type="text"
 								bind:value={newContact.role}
-								placeholder="Role (e.g., Director)"
+								placeholder={m.placeholder_contact_role()}
 								class="contact-field"
 							/>
 								<input
 								type="tel"
 								bind:value={newContact.phone}
-								placeholder="Phone"
+								placeholder={m.label_phone()}
 								class="contact-field"
 							/>
 							<input
 								type="email"
 								bind:value={newContact.email}
-								placeholder="Email"
+								placeholder={m.label_email()}
 								class="contact-field"
 							/>
 							<textarea
 								bind:value={newContact.notes}
-								placeholder="Notes about this contact..."
+								placeholder={m.placeholder_contact_notes()}
 								rows="2"
 								class="contact-notes-input"
 							></textarea>
 							<label class="primary-checkbox">
 								<input type="checkbox" bind:checked={newContact.is_primary} />
-								Primary contact
+								{m.primary_contact()}
 							</label>
 							<div class="contact-form-actions">
 								<button
 									class="btn btn-secondary btn-sm"
 									onclick={() => { showContactForm = false; newContact = { name: '', role: '', phone: '', email: '', notes: '', is_primary: false }; }}
 								>
-									Cancel
+									{m.btn_cancel()}
 								</button>
 								<button
 									class="btn btn-primary btn-sm"
 									onclick={addContact}
 									disabled={!newContact.name.trim()}
 								>
-									Add Contact
+									{m.btn_add_contact()}
 								</button>
 							</div>
 						</div>
@@ -593,15 +603,15 @@
 								<line x1="12" y1="5" x2="12" y2="19"/>
 								<line x1="5" y1="12" x2="19" y2="12"/>
 							</svg>
-							Add Contact
+							{m.btn_add_contact()}
 						</button>
 					{/if}
 
 					<div class="contacts-list">
 						{#if loadingContacts}
-							<p class="contacts-loading">Loading contacts...</p>
+							<p class="contacts-loading">{m.loading_contacts()}</p>
 						{:else if contacts.length === 0}
-							<p class="contacts-empty">No contacts yet</p>
+							<p class="contacts-empty">{m.empty_contacts()}</p>
 						{:else}
 							{#each contacts as contact (contact.id)}
 								<div class="contact-item" class:is-primary={contact.is_primary}>
@@ -610,40 +620,40 @@
 											<input
 												type="text"
 												bind:value={editContactForm.name}
-												placeholder="Name *"
+												placeholder={m.placeholder_name_required()}
 												class="contact-field"
 											/>
 											<input
 												type="text"
 												bind:value={editContactForm.role}
-												placeholder="Role"
+												placeholder={m.placeholder_role()}
 												class="contact-field"
 											/>
 											<input
 												type="tel"
 												bind:value={editContactForm.phone}
-												placeholder="Phone"
+												placeholder={m.label_phone()}
 												class="contact-field"
 											/>
 											<input
 												type="email"
 												bind:value={editContactForm.email}
-												placeholder="Email"
+												placeholder={m.label_email()}
 												class="contact-field"
 											/>
 											<textarea
 												bind:value={editContactForm.notes}
-												placeholder="Notes"
+												placeholder={m.placeholder_notes()}
 												rows="2"
 												class="contact-notes-input"
 											></textarea>
 											<label class="primary-checkbox">
 												<input type="checkbox" bind:checked={editContactForm.is_primary} />
-												Primary contact
+												{m.primary_contact()}
 											</label>
 											<div class="contact-edit-actions">
-												<button class="btn btn-sm btn-secondary" onclick={cancelEditContact}>Cancel</button>
-												<button class="btn btn-sm btn-primary" onclick={saveContact} disabled={!editContactForm.name?.trim()}>Save</button>
+												<button class="btn btn-sm btn-secondary" onclick={cancelEditContact}>{m.btn_cancel()}</button>
+												<button class="btn btn-sm btn-primary" onclick={saveContact} disabled={!editContactForm.name?.trim()}>{m.btn_save_short()}</button>
 											</div>
 										</div>
 									{:else}
@@ -651,7 +661,7 @@
 											<div class="contact-name-row">
 												<span class="contact-name">{contact.name}</span>
 												{#if contact.is_primary}
-													<span class="primary-badge">Primary</span>
+													<span class="primary-badge">{m.primary()}</span>
 												{/if}
 											</div>
 											{#if contact.role}
@@ -681,15 +691,15 @@
 											<p class="contact-notes">{contact.notes}</p>
 										{/if}
 										<div class="contact-footer">
-											<button class="contact-edit" onclick={() => startEditContact(contact)} aria-label="Edit contact">
-												Edit
+											<button class="contact-edit" onclick={() => startEditContact(contact)} aria-label={m.btn_edit_short()}>
+												{m.btn_edit_short()}
 											</button>
 											<button
 												class="contact-delete"
 												onclick={() => deleteContact(contact.id)}
-												aria-label="Delete contact"
+												aria-label={m.btn_delete()}
 											>
-												Delete
+												{m.btn_delete()}
 											</button>
 										</div>
 									{/if}
@@ -700,12 +710,12 @@
 
 					<div class="section-divider"></div>
 
-					<h3 class="reviews-title">Reviews ({reviews.length})</h3>
+					<h3 class="reviews-title">{m.section_reviews({ count: reviews.length })}</h3>
 
 					{#if showReviewForm}
 						<div class="review-input">
 							<div class="rating-input">
-								<label>Rating</label>
+								<label>{m.label_rating()}</label>
 								<div class="star-selector">
 									{#each [1, 2, 3, 4, 5] as star}
 										<button
@@ -722,14 +732,14 @@
 
 							<textarea
 								bind:value={newReview.text}
-								placeholder="Write a review..."
+								placeholder={m.placeholder_write_review()}
 								rows="3"
 							></textarea>
 
 							<input
 								type="url"
 								bind:value={newReview.source_url}
-								placeholder="Source URL (optional)"
+								placeholder={m.placeholder_source_url()}
 							/>
 
 							<div class="review-form-actions">
@@ -737,14 +747,14 @@
 									class="btn btn-secondary btn-sm"
 									onclick={() => { showReviewForm = false; newReview = { text: '', source_url: '', rating: 5 }; }}
 								>
-									Cancel
+									{m.btn_cancel()}
 								</button>
 								<button
 									class="btn btn-primary btn-sm"
 									onclick={addReview}
 									disabled={!newReview.text.trim()}
 								>
-									Add Review
+									{m.btn_add_review()}
 								</button>
 							</div>
 						</div>
@@ -754,15 +764,15 @@
 								<line x1="12" y1="5" x2="12" y2="19"/>
 								<line x1="5" y1="12" x2="19" y2="12"/>
 							</svg>
-							Add Review
+							{m.btn_add_review()}
 						</button>
 					{/if}
 
 					<div class="reviews-list">
 						{#if loadingReviews}
-							<p class="reviews-loading">Loading reviews...</p>
+							<p class="reviews-loading">{m.loading_reviews()}</p>
 						{:else if reviews.length === 0}
-							<p class="reviews-empty">No reviews yet</p>
+							<p class="reviews-empty">{m.empty_reviews()}</p>
 						{:else}
 							{#each reviews as review (review.id)}
 								<div class="review-item">
@@ -774,7 +784,7 @@
 										</span>
 										{#if review.source_url}
 											<a href={review.source_url} target="_blank" rel="noopener" class="review-link">
-												View Source
+												{m.btn_view_source()}
 											</a>
 										{/if}
 									</div>
@@ -900,6 +910,16 @@
 	}
 
 	/* Daycare Details */
+	.daycare-details {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+
+	.details-content {
+		flex: 1;
+	}
+
 	.daycare-name {
 		font-family: 'Source Serif 4', Georgia, serif;
 		font-size: 1.75rem;
@@ -912,7 +932,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.125rem;
-		margin-bottom: 1.5rem;
+		margin-bottom: 1rem;
 	}
 
 	.star {
@@ -930,11 +950,39 @@
 		color: var(--text-secondary);
 	}
 
+	.quick-links {
+		display: flex;
+		gap: 0.75rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.quick-link {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		background: #f5f1eb;
+		color: var(--text-secondary);
+		transition: all 0.15s ease;
+	}
+
+	.quick-link:hover {
+		background: var(--accent);
+		color: white;
+	}
+
+	.quick-link svg {
+		width: 20px;
+		height: 20px;
+	}
+
 	.info-grid {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
-		gap: 0.75rem 1.5rem;
-		margin-bottom: 1.5rem;
+		gap: 1rem 1.5rem;
+		margin-bottom: 2rem;
 	}
 
 	.info-item {
@@ -956,22 +1004,16 @@
 	}
 
 	.info-value {
-		font-size: 0.9rem;
+		font-size: 0.95rem;
 		color: var(--text-primary);
-	}
-
-	.info-value.link {
-		color: var(--accent);
-		text-decoration: none;
-	}
-
-	.info-value.link:hover {
-		text-decoration: underline;
 	}
 
 	.detail-actions {
 		display: flex;
 		gap: 0.75rem;
+		padding-top: 1.5rem;
+		border-top: 1px solid var(--border-color);
+		margin-top: auto;
 	}
 
 	/* Edit Form */

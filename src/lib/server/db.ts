@@ -61,6 +61,12 @@ db.exec(`
 		FOREIGN KEY (daycare_id) REFERENCES daycares(id) ON DELETE CASCADE
 	);
 
+	CREATE TABLE IF NOT EXISTS settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_daycares_stage ON daycares(stage);
 	CREATE INDEX IF NOT EXISTS idx_notes_daycare_id ON notes(daycare_id);
 	CREATE INDEX IF NOT EXISTS idx_reviews_daycare_id ON reviews(daycare_id);
@@ -91,6 +97,28 @@ try {
 // Migration: Add facebook column to daycares if it doesn't exist
 try {
 	db.exec(`ALTER TABLE daycares ADD COLUMN facebook TEXT DEFAULT ''`);
+} catch {
+	// Column already exists, ignore error
+}
+
+// Migration: Add commute time columns for tracking travel time from home
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN commute_minutes INTEGER`);
+} catch {
+	// Column already exists, ignore error
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN commute_origin TEXT DEFAULT ''`);
+} catch {
+	// Column already exists, ignore error
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN commute_destination TEXT DEFAULT ''`);
+} catch {
+	// Column already exists, ignore error
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN commute_calculated_at DATETIME`);
 } catch {
 	// Column already exists, ignore error
 }
@@ -462,4 +490,56 @@ export function bulkCreateDaycares(daycares: DaycareInput[]): Daycare[] {
 	})();
 
 	return created;
+}
+
+// Settings operations
+export function getSetting(key: string): string | undefined {
+	const result = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+	return result?.value;
+}
+
+export function setSetting(key: string, value: string): void {
+	db.prepare(
+		`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+	).run(key, value);
+}
+
+export function getAllSettings(): Record<string, string> {
+	const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+	const settings: Record<string, string> = {};
+	for (const row of rows) {
+		settings[row.key] = row.value;
+	}
+	return settings;
+}
+
+// Commute time operations
+export function getDaycaresNeedingCommute(homeAddress: string): Daycare[] {
+	return db.prepare(`
+		SELECT * FROM daycares
+		WHERE address IS NOT NULL AND address != ''
+		AND (
+			commute_origin IS NULL OR commute_origin = '' OR commute_origin != ?
+			OR commute_destination IS NULL OR commute_destination = '' OR commute_destination != address
+			OR commute_minutes IS NULL
+		)
+	`).all(homeAddress) as Daycare[];
+}
+
+export function updateDaycareCommute(
+	id: number,
+	commuteMinutes: number,
+	commuteOrigin: string,
+	commuteDestination: string
+): void {
+	db.prepare(`
+		UPDATE daycares
+		SET commute_minutes = ?,
+			commute_origin = ?,
+			commute_destination = ?,
+			commute_calculated_at = CURRENT_TIMESTAMP,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`).run(commuteMinutes, commuteOrigin, commuteDestination, id);
 }

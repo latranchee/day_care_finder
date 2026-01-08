@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDaycareById, getNotesByDaycareId, createNote } from '$lib/server/db';
+import { getDaycareById, getContactsByDaycareId, createContact } from '$lib/server/db';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const daycareId = parseInt(params.id);
@@ -13,8 +13,8 @@ export const GET: RequestHandler = async ({ params }) => {
 		throw error(404, 'Daycare not found');
 	}
 
-	const notes = getNotesByDaycareId(daycareId);
-	return json(notes);
+	const contacts = getContactsByDaycareId(daycareId);
+	return json(contacts);
 };
 
 export const POST: RequestHandler = async ({ params, request }) => {
@@ -28,11 +28,20 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		throw error(404, 'Daycare not found');
 	}
 
-	const { content, username } = await request.json();
-	if (!content || content.trim() === '') {
-		throw error(400, 'Content is required');
+	const { name, role, phone, email, notes, is_primary } = await request.json();
+
+	if (!name || name.trim() === '') {
+		throw error(400, 'Contact name is required');
 	}
 
-	const note = createNote(daycareId, content.trim(), username?.trim() || undefined);
-	return json(note, { status: 201 });
+	const contact = createContact(daycareId, {
+		name: name.trim(),
+		role: role?.trim() || '',
+		phone: phone?.trim() || '',
+		email: email?.trim() || '',
+		notes: notes?.trim() || '',
+		is_primary: is_primary || false
+	});
+
+	return json(contact, { status: 201 });
 };

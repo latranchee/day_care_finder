@@ -5,16 +5,29 @@
 
 	type DaycareWithExtras = Daycare & { firstReview?: Review; primaryContact?: Contact; contactCount: number };
 
+	interface CardSettings {
+		showAddress: boolean;
+		showPhone: boolean;
+		showEmail: boolean;
+		showPrice: boolean;
+		showAgeRange: boolean;
+		showFacebook: boolean;
+		showContacts: boolean;
+		showReview: boolean;
+		showCommuteTime: boolean;
+	}
+
 	interface Props {
 		stage: { id: Stage; label: string };
 		items: DaycareWithExtras[];
+		cardSettings: CardSettings;
 		onDndConsider: (e: CustomEvent) => void;
 		onDndFinalize: (e: CustomEvent) => void;
 		onSelectDaycare: (daycare: Daycare) => void;
 		onHideDaycare?: (id: number) => void;
 	}
 
-	let { stage, items, onDndConsider, onDndFinalize, onSelectDaycare, onHideDaycare }: Props = $props();
+	let { stage, items, cardSettings, onDndConsider, onDndFinalize, onSelectDaycare, onHideDaycare }: Props = $props();
 
 	const stageColors: Record<Stage, { bg: string; border: string; header: string }> = {
 		to_research: { bg: '#faf8f5', border: '#e8e2d9', header: '#8b7355' },
@@ -65,7 +78,7 @@
 	>
 		{#each items as item (item.id)}
 			<div class="card-wrapper">
-				<DaycareCard daycare={item} firstReview={item.firstReview} primaryContact={item.primaryContact} contactCount={item.contactCount} onSelect={onSelectDaycare} onHide={onHideDaycare} />
+				<DaycareCard daycare={item} firstReview={item.firstReview} primaryContact={item.primaryContact} contactCount={item.contactCount} {cardSettings} onSelect={onSelectDaycare} onHide={onHideDaycare} />
 			</div>
 		{/each}
 	</div>

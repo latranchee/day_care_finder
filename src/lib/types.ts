@@ -14,6 +14,10 @@ export interface Daycare {
 	stage: Stage;
 	position: number;
 	hidden: boolean;
+	commute_minutes: number | null;
+	commute_origin: string;
+	commute_destination: string;
+	commute_calculated_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -71,14 +75,21 @@ export type Stage =
 	| 'waitlisted'
 	| 'decision_made';
 
-export const STAGES: { id: Stage; label: string }[] = [
-	{ id: 'to_research', label: 'To Research' },
-	{ id: 'to_contact', label: 'To Contact' },
-	{ id: 'contacted', label: 'Contacted' },
-	{ id: 'visited', label: 'Visited' },
-	{ id: 'waitlisted', label: 'Waitlisted' },
-	{ id: 'decision_made', label: 'Decision Made' }
+// Stage IDs in order (labels are provided via translations)
+export const STAGE_IDS: Stage[] = [
+	'to_research',
+	'to_contact',
+	'contacted',
+	'visited',
+	'waitlisted',
+	'decision_made'
 ];
+
+// Legacy export for backwards compatibility - labels will be overridden by translations
+export const STAGES: { id: Stage; label: string }[] = STAGE_IDS.map(id => ({
+	id,
+	label: id // Will be replaced by translations at runtime
+}));
 
 export interface DaycareInput {
 	name: string;
