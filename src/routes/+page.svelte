@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
-	import type { Daycare, DaycareInput, Stage, DaycareWithExtras, CardSettings } from '$lib/types';
+	import type { Daycare, DaycareInput, Stage, DaycareWithExtras, CardSettings, FilterSettings } from '$lib/types';
 	import KanbanColumn from '$lib/components/KanbanColumn.svelte';
 	import DaycareModal from '$lib/components/DaycareModal.svelte';
 	import ImportCSV from '$lib/components/ImportCSV.svelte';
@@ -53,6 +53,33 @@
 	let isCalculatingCommutes = $state(false);
 	let commuteStatus = $state<string | null>(null);
 
+	// Filter settings - load from localStorage
+	const defaultFilterSettings: FilterSettings = {
+		maxCommuteMinutes: null,
+		requireReviews: false,
+		subsidizedOnly: false,
+		minRating: null,
+		requirePhone: false,
+		requireEmail: false,
+		requireWebsite: false,
+		requireFacebook: false
+	};
+
+	function loadFilterSettings(): FilterSettings {
+		if (typeof window === 'undefined') return defaultFilterSettings;
+		const saved = localStorage.getItem('filterSettings');
+		if (saved) {
+			try {
+				return { ...defaultFilterSettings, ...JSON.parse(saved) };
+			} catch {
+				return defaultFilterSettings;
+			}
+		}
+		return defaultFilterSettings;
+	}
+
+	let filterSettings = $state<FilterSettings>(loadFilterSettings());
+
 	// Card display settings - load from localStorage
 	const defaultCardSettings: CardSettings = {
 		showAddress: true,
@@ -63,7 +90,8 @@
 		showFacebook: true,
 		showContacts: true,
 		showReview: true,
-		showCommuteTime: true
+		showCommuteTime: true,
+		showSubsidized: true
 	};
 
 	function loadCardSettings() {
@@ -87,6 +115,63 @@
 			localStorage.setItem('cardSettings', JSON.stringify(cardSettings));
 		}
 	});
+
+	// Save filter settings to localStorage when they change
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('filterSettings', JSON.stringify(filterSettings));
+		}
+	});
+
+	// Count active filters
+	const activeFilterCount = $derived(() => {
+		let count = 0;
+		if (filterSettings.maxCommuteMinutes !== null) count++;
+		if (filterSettings.requireReviews) count++;
+		if (filterSettings.subsidizedOnly) count++;
+		if (filterSettings.minRating !== null) count++;
+		if (filterSettings.requirePhone) count++;
+		if (filterSettings.requireEmail) count++;
+		if (filterSettings.requireWebsite) count++;
+		if (filterSettings.requireFacebook) count++;
+		return count;
+	});
+
+	// Count daycares hidden by filters (excluding the "hidden" flag)
+	const filteredOutCount = $derived(() => {
+		if (activeFilterCount() === 0) return 0;
+
+		let total = 0;
+		let filtered = 0;
+
+		for (const stage of Object.keys(columns) as Stage[]) {
+			for (const d of columns[stage]) {
+				// Skip already hidden daycares
+				if (!showHidden && d.hidden) continue;
+				total++;
+
+				// Check if filtered out by any active filter
+				if (filterSettings.maxCommuteMinutes !== null) {
+					if (d.commute_minutes === null || d.commute_minutes > filterSettings.maxCommuteMinutes) {
+						filtered++;
+						continue;
+					}
+				}
+				if (filterSettings.requireReviews && !d.firstReview) { filtered++; continue; }
+				if (filterSettings.subsidizedOnly && !d.subventionne) { filtered++; continue; }
+				if (filterSettings.minRating !== null && (d.rating === null || d.rating < filterSettings.minRating)) { filtered++; continue; }
+				if (filterSettings.requirePhone && !d.phone) { filtered++; continue; }
+				if (filterSettings.requireEmail && !d.email) { filtered++; continue; }
+				if (filterSettings.requireWebsite && !d.website) { filtered++; continue; }
+				if (filterSettings.requireFacebook && !d.facebook) { filtered++; continue; }
+			}
+		}
+		return filtered;
+	});
+
+	function clearAllFilters() {
+		filterSettings = { ...defaultFilterSettings };
+	}
 
 	// Only sync from server on initial load or explicit refresh (not after every change)
 	let lastDataVersion = $state(JSON.stringify(data.columns));
@@ -231,7 +316,32 @@
 	);
 
 	function getFilteredItems(items: DaycareWithExtras[]): DaycareWithExtras[] {
-		return showHidden ? items : items.filter((d) => !d.hidden);
+		return items.filter((d) => {
+			// Filter by hidden status
+			if (!showHidden && d.hidden) return false;
+
+			// Filter by max commute time (also hide those without commute time computed)
+			if (filterSettings.maxCommuteMinutes !== null) {
+				if (d.commute_minutes === null || d.commute_minutes > filterSettings.maxCommuteMinutes) return false;
+			}
+
+			// Filter by reviews requirement
+			if (filterSettings.requireReviews && !d.firstReview) return false;
+
+			// Filter by subsidized only
+			if (filterSettings.subsidizedOnly && !d.subventionne) return false;
+
+			// Filter by minimum rating
+			if (filterSettings.minRating !== null && (d.rating === null || d.rating < filterSettings.minRating)) return false;
+
+			// Filter by required contact info
+			if (filterSettings.requirePhone && !d.phone) return false;
+			if (filterSettings.requireEmail && !d.email) return false;
+			if (filterSettings.requireWebsite && !d.website) return false;
+			if (filterSettings.requireFacebook && !d.facebook) return false;
+
+			return true;
+		});
 	}
 
 	function handleReviewsChange() {
@@ -269,13 +379,13 @@
 	// Calculate commute times for all daycares
 	async function calculateCommutes() {
 		if (!homeAddress.trim()) {
-			commuteStatus = 'Please enter your home address first';
+			commuteStatus = m.commute_enter_address_first();
 			setTimeout(() => commuteStatus = null, 3000);
 			return;
 		}
 
 		isCalculatingCommutes = true;
-		commuteStatus = 'Calculating commute times...';
+		commuteStatus = m.commute_calculating();
 
 		try {
 			// Save the home address first
@@ -307,25 +417,25 @@
 							commuteStatus = data.error;
 						} else if (data.type === 'start') {
 							if (data.total === 0) {
-								commuteStatus = 'All commutes are up to date';
+								commuteStatus = m.commute_all_up_to_date();
 							}
 						} else if (data.type === 'progress') {
-							commuteStatus = `Calculating ${data.current} of ${data.total}: ${data.name}`;
+							commuteStatus = m.commute_progress({ current: data.current, total: data.total, name: data.name });
 						} else if (data.type === 'done') {
 							if (data.calculated > 0) {
-								commuteStatus = `Calculated ${data.calculated} commute${data.calculated > 1 ? 's' : ''}`;
+								commuteStatus = m.commute_calculated({ count: data.calculated });
 								invalidateAll();
 							} else if (data.errors?.length > 0) {
-								commuteStatus = `${data.errors.length} error(s) occurred`;
+								commuteStatus = m.commute_errors({ count: data.errors.length });
 							} else {
-								commuteStatus = 'All commutes are up to date';
+								commuteStatus = m.commute_all_up_to_date();
 							}
 						}
 					}
 				}
 			}
 		} catch (err) {
-			commuteStatus = 'Failed to calculate commutes';
+			commuteStatus = m.commute_failed();
 			console.error('Failed to calculate commutes:', err);
 		} finally {
 			isCalculatingCommutes = false;
@@ -393,7 +503,7 @@
 					class="btn btn-icon-only"
 					class:active={showSettings}
 					onclick={() => showSettings = !showSettings}
-					title="Card display settings"
+					title={m.settings_card_display_title()}
 				>
 					<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<circle cx="12" cy="12" r="3"/>
@@ -439,21 +549,163 @@
 								</label>
 								<label class="chip" class:active={cardSettings.showCommuteTime}>
 									<input type="checkbox" bind:checked={cardSettings.showCommuteTime} />
-									Commute
+									{m.label_commute()}
+								</label>
+								<label class="chip" class:active={cardSettings.showSubsidized}>
+									<input type="checkbox" bind:checked={cardSettings.showSubsidized} />
+									{m.label_subsidized()}
+								</label>
+							</div>
+						</div>
+
+						<div class="settings-section filters-section">
+							<div class="settings-header filters-header">
+								<span>{m.settings_filters()}</span>
+								{#if activeFilterCount() > 0}
+									<span class="filter-badge">{m.filter_active_count({ count: activeFilterCount() })}</span>
+									{#if filteredOutCount() > 0}
+										<span class="filter-badge filter-badge-hidden">{m.filter_hidden_count({ count: filteredOutCount() })}</span>
+									{/if}
+									<button class="clear-all-btn" onclick={clearAllFilters}>
+										{m.filter_clear_all()}
+									</button>
+								{/if}
+							</div>
+
+							<div class="filter-grid">
+								<!-- Commute Time Slider -->
+								<div class="filter-card">
+									<div class="filter-card-header">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<circle cx="12" cy="12" r="10"/>
+											<polyline points="12 6 12 12 16 14"/>
+										</svg>
+										<span>{m.settings_max_commute()}</span>
+									</div>
+									<div class="slider-row">
+										<input
+											type="range"
+											min="5"
+											max="60"
+											step="5"
+											value={filterSettings.maxCommuteMinutes ?? 60}
+											oninput={(e) => {
+												const val = parseInt(e.currentTarget.value, 10);
+												filterSettings.maxCommuteMinutes = val >= 60 ? null : val;
+											}}
+										/>
+										<span class="slider-value" class:inactive={filterSettings.maxCommuteMinutes === null}>
+											{filterSettings.maxCommuteMinutes === null ? m.settings_max_commute_any() : m.settings_max_commute_minutes({ minutes: filterSettings.maxCommuteMinutes })}
+										</span>
+									</div>
+								</div>
+
+								<!-- Rating Slider -->
+								<div class="filter-card">
+									<div class="filter-card-header">
+										<svg viewBox="0 0 24 24" fill="currentColor">
+											<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+										</svg>
+										<span>{m.filter_min_rating()}</span>
+									</div>
+									<div class="rating-selector">
+										<button
+											class="rating-btn"
+											class:active={filterSettings.minRating === null}
+											onclick={() => filterSettings.minRating = null}
+										>
+											{m.filter_any_rating()}
+										</button>
+										{#each [2, 3, 4] as rating}
+											<button
+												class="rating-btn"
+												class:active={filterSettings.minRating === rating}
+												onclick={() => filterSettings.minRating = rating}
+											>
+												{m.filter_rating_stars({ rating })}
+											</button>
+										{/each}
+									</div>
+								</div>
+							</div>
+
+							<!-- Toggle Filters -->
+							<div class="filter-toggles">
+								<label class="filter-toggle" class:active={filterSettings.requireReviews}>
+									<input type="checkbox" bind:checked={filterSettings.requireReviews} />
+									<span class="toggle-icon">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+										</svg>
+									</span>
+									<span>{m.filter_has_reviews()}</span>
+								</label>
+
+								<label class="filter-toggle" class:active={filterSettings.subsidizedOnly}>
+									<input type="checkbox" bind:checked={filterSettings.subsidizedOnly} />
+									<span class="toggle-icon">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+										</svg>
+									</span>
+									<span>{m.filter_subsidized_only()}</span>
+								</label>
+
+								<label class="filter-toggle" class:active={filterSettings.requirePhone}>
+									<input type="checkbox" bind:checked={filterSettings.requirePhone} />
+									<span class="toggle-icon">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+										</svg>
+									</span>
+									<span>{m.filter_has_phone()}</span>
+								</label>
+
+								<label class="filter-toggle" class:active={filterSettings.requireEmail}>
+									<input type="checkbox" bind:checked={filterSettings.requireEmail} />
+									<span class="toggle-icon">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+											<polyline points="22,6 12,13 2,6"/>
+										</svg>
+									</span>
+									<span>{m.filter_has_email()}</span>
+								</label>
+
+								<label class="filter-toggle" class:active={filterSettings.requireWebsite}>
+									<input type="checkbox" bind:checked={filterSettings.requireWebsite} />
+									<span class="toggle-icon">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<circle cx="12" cy="12" r="10"/>
+											<line x1="2" y1="12" x2="22" y2="12"/>
+											<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+										</svg>
+									</span>
+									<span>{m.filter_has_website()}</span>
+								</label>
+
+								<label class="filter-toggle" class:active={filterSettings.requireFacebook}>
+									<input type="checkbox" bind:checked={filterSettings.requireFacebook} />
+									<span class="toggle-icon">
+										<svg viewBox="0 0 24 24" fill="currentColor">
+											<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+										</svg>
+									</span>
+									<span>{m.filter_has_facebook()}</span>
 								</label>
 							</div>
 						</div>
 
 						<div class="settings-section">
-							<div class="settings-header">Commute Settings</div>
+							<div class="settings-header">{m.settings_commute()}</div>
 							<div class="settings-field">
-								<label for="home-address">Home Address</label>
+								<label for="home-address">{m.settings_home_address()}</label>
 								<input
 									type="text"
 									id="home-address"
 									bind:value={homeAddress}
 									onblur={saveHomeAddress}
-									placeholder="Enter your home address"
+									placeholder={m.settings_home_address_placeholder()}
 								/>
 							</div>
 							<button
@@ -465,13 +717,13 @@
 									<svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
 									</svg>
-									Calculating...
+									{m.settings_calculating()}
 								{:else}
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<circle cx="12" cy="12" r="10"/>
 										<polyline points="12 6 12 12 16 14"/>
 									</svg>
-									Calculate Commutes
+									{m.settings_calculate_commutes()}
 								{/if}
 							</button>
 							{#if commuteStatus}
@@ -511,6 +763,19 @@
 				</svg>
 				{m.btn_add_daycare()}
 			</button>
+
+			<div class="auth-section">
+				{#if data.user}
+					<span class="user-info">{m.auth_welcome({ name: data.user.name || data.user.email })}</span>
+					<form action="/logout" method="POST" class="logout-form">
+						<button type="submit" class="btn btn-secondary btn-sm">
+							{m.auth_logout()}
+						</button>
+					</form>
+				{:else}
+					<a href="/login" class="btn btn-secondary btn-sm">{m.auth_login()}</a>
+				{/if}
+			</div>
 		</div>
 	</header>
 
@@ -535,6 +800,7 @@
 	onSave={handleSaveDaycare}
 	onDelete={handleDeleteDaycare}
 	onReviewsChange={handleReviewsChange}
+	user={data.user}
 />
 
 {#if showImport}
@@ -642,6 +908,31 @@
 	.header-actions {
 		display: flex;
 		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.auth-section {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-left: 0.5rem;
+		padding-left: 0.75rem;
+		border-left: 1px solid var(--border-color);
+	}
+
+	.user-info {
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+		white-space: nowrap;
+	}
+
+	.logout-form {
+		margin: 0;
+	}
+
+	.btn-sm {
+		padding: 0.375rem 0.75rem;
+		font-size: 0.85rem;
 	}
 
 	/* Base btn, btn-primary, btn-secondary from shared.css */
@@ -695,9 +986,10 @@
 		border: 1px solid #e8dfd3;
 		border-radius: 16px;
 		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-		width: 320px;
+		width: 400px;
+		max-height: 80vh;
+		overflow-y: auto;
 		z-index: 100;
-		overflow: hidden;
 	}
 
 	.settings-section {
@@ -827,6 +1119,223 @@
 		margin-top: 0.5rem;
 	}
 
+	/* Filter Section Styles */
+	.filters-section {
+		background: linear-gradient(180deg, #faf8f5 0%, #f5f1eb 100%);
+	}
+
+	.filters-header {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.filter-badge {
+		font-size: 0.65rem;
+		font-weight: 600;
+		color: white;
+		background: #c47a4e;
+		padding: 0.2rem 0.5rem;
+		border-radius: 999px;
+		text-transform: none;
+		letter-spacing: 0;
+	}
+
+	.filter-badge-hidden {
+		background: #7a6d5c;
+	}
+
+	.clear-all-btn {
+		margin-left: auto;
+		font-size: 0.7rem;
+		color: #c47a4e;
+		background: none;
+		border: none;
+		cursor: pointer;
+		text-decoration: underline;
+		padding: 0;
+	}
+
+	.clear-all-btn:hover {
+		color: #a35f3a;
+	}
+
+	.filter-grid {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.filter-card {
+		background: white;
+		border: 1px solid #e8dfd3;
+		border-radius: 10px;
+		padding: 0.75rem;
+	}
+
+	.filter-card-header {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: #5a4d3d;
+		margin-bottom: 0.625rem;
+	}
+
+	.filter-card-header svg {
+		width: 14px;
+		height: 14px;
+		color: #c47a4e;
+	}
+
+	.slider-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.slider-row input[type="range"] {
+		flex: 1;
+		height: 4px;
+		border-radius: 2px;
+		background: linear-gradient(to right, #c47a4e 0%, #e8dfd3 0%);
+		appearance: none;
+		cursor: pointer;
+	}
+
+	.slider-row input[type="range"]::-webkit-slider-thumb {
+		appearance: none;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: #c47a4e;
+		cursor: pointer;
+		box-shadow: 0 2px 6px rgba(196, 122, 78, 0.4);
+		transition: transform 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	.slider-row input[type="range"]::-webkit-slider-thumb:hover {
+		transform: scale(1.15);
+		box-shadow: 0 3px 8px rgba(196, 122, 78, 0.5);
+	}
+
+	.slider-row input[type="range"]::-moz-range-thumb {
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: #c47a4e;
+		cursor: pointer;
+		border: none;
+		box-shadow: 0 2px 6px rgba(196, 122, 78, 0.4);
+	}
+
+	.slider-value {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: #c47a4e;
+		min-width: 45px;
+		text-align: right;
+	}
+
+	.slider-value.inactive {
+		color: #a09485;
+	}
+
+	.rating-selector {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.rating-btn {
+		flex: 1;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: #7a6d5c;
+		background: #f5f1eb;
+		border: 1px solid transparent;
+		border-radius: 6px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.rating-btn:hover {
+		background: #ebe5db;
+	}
+
+	.rating-btn.active {
+		background: #c47a4e;
+		color: white;
+	}
+
+	.filter-toggles {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 0.5rem;
+	}
+
+	.filter-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.625rem;
+		background: white;
+		border: 1px solid #e8dfd3;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		font-size: 0.7rem;
+		color: #7a6d5c;
+	}
+
+	.filter-toggle:hover {
+		border-color: #d8cfc4;
+		background: #faf8f5;
+	}
+
+	.filter-toggle.active {
+		background: linear-gradient(135deg, #c47a4e 0%, #d4896a 100%);
+		border-color: #c47a4e;
+		color: white;
+	}
+
+	.filter-toggle input[type="checkbox"] {
+		display: none;
+	}
+
+	.toggle-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		background: #f5f1eb;
+		border-radius: 5px;
+		flex-shrink: 0;
+	}
+
+	.filter-toggle.active .toggle-icon {
+		background: rgba(255, 255, 255, 0.25);
+	}
+
+	.toggle-icon svg {
+		width: 12px;
+		height: 12px;
+	}
+
+	.filter-toggle.active .toggle-icon svg {
+		stroke: white;
+		fill: none;
+	}
+
+	.filter-toggle.active .toggle-icon svg[fill="currentColor"] {
+		fill: white;
+		stroke: none;
+	}
+
 	.language-toggle {
 		display: flex;
 		gap: 0.5rem;
@@ -920,4 +1429,5 @@
 			padding: 1rem;
 		}
 	}
+
 </style>

@@ -67,10 +67,67 @@ db.exec(`
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		email TEXT UNIQUE NOT NULL,
+		password_hash TEXT NOT NULL,
+		name TEXT DEFAULT '',
+		role TEXT DEFAULT 'user',
+		home_address TEXT DEFAULT '',
+		max_commute_minutes INTEGER DEFAULT 5,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS sessions (
+		id TEXT PRIMARY KEY,
+		user_id INTEGER NOT NULL,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_daycares_stage ON daycares(stage);
+	CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 	CREATE INDEX IF NOT EXISTS idx_notes_daycare_id ON notes(daycare_id);
 	CREATE INDEX IF NOT EXISTS idx_reviews_daycare_id ON reviews(daycare_id);
 	CREATE INDEX IF NOT EXISTS idx_contacts_daycare_id ON contacts(daycare_id);
+
+	CREATE TABLE IF NOT EXISTS children (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		date_of_birth TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS user_children (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		child_id INTEGER NOT NULL,
+		role TEXT DEFAULT 'owner',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE,
+		UNIQUE(user_id, child_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS invitations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		child_id INTEGER NOT NULL,
+		code TEXT UNIQUE NOT NULL,
+		created_by_user_id INTEGER NOT NULL,
+		expires_at DATETIME NOT NULL,
+		used_by_user_id INTEGER,
+		used_at DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (used_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_user_children_user_id ON user_children(user_id);
+	CREATE INDEX IF NOT EXISTS idx_user_children_child_id ON user_children(child_id);
+	CREATE INDEX IF NOT EXISTS idx_invitations_code ON invitations(code);
+	CREATE INDEX IF NOT EXISTS idx_invitations_child_id ON invitations(child_id);
 `);
 
 // Migration: Add hidden column if it doesn't exist (for existing databases)
@@ -128,6 +185,67 @@ try {
 	// Column already exists, ignore error
 }
 
+// Migration: Add owner_id column for daycare ownership
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN owner_id INTEGER REFERENCES users(id)`);
+} catch {
+	// Column already exists, ignore error
+}
+
+// Migration: Add portal fields
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN portal_url TEXT DEFAULT ''`);
+} catch {
+	// Column already exists
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN installation_id TEXT DEFAULT ''`);
+} catch {
+	// Column already exists
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN daycare_type TEXT DEFAULT ''`);
+} catch {
+	// Column already exists
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN subventionne INTEGER DEFAULT 0`);
+} catch {
+	// Column already exists
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN places_poupons INTEGER`);
+} catch {
+	// Column already exists
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN places_18_mois_plus INTEGER`);
+} catch {
+	// Column already exists
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN description TEXT DEFAULT ''`);
+} catch {
+	// Column already exists
+}
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN horaires TEXT DEFAULT ''`);
+} catch {
+	// Column already exists
+}
+
+// Migration: Add child_id column for scoping daycares to children
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN child_id INTEGER REFERENCES children(id) ON DELETE CASCADE`);
+} catch {
+	// Column already exists
+}
+try {
+	db.exec(`CREATE INDEX IF NOT EXISTS idx_daycares_child_id ON daycares(child_id)`);
+} catch {
+	// Index already exists
+}
+
 // Migration: Migrate existing phone/email from daycares to contacts table
 try {
 	const daycaresWithContact = db
@@ -171,8 +289,8 @@ export function createDaycare(input: DaycareInput): Daycare {
 
 	const result = db
 		.prepare(
-			`INSERT INTO daycares (name, address, phone, email, facebook, website, capacity, price, hours, age_range, rating, stage, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO daycares (name, address, phone, email, facebook, website, portal_url, capacity, price, hours, age_range, rating, stage, position, installation_id, daycare_type, subventionne, places_poupons, places_18_mois_plus, description, horaires)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			input.name,
@@ -181,13 +299,21 @@ export function createDaycare(input: DaycareInput): Daycare {
 			input.email || '',
 			input.facebook || '',
 			input.website || '',
+			input.portal_url || '',
 			input.capacity ?? null,
 			input.price || '',
 			input.hours || '',
 			input.age_range || '',
 			input.rating ?? null,
 			stage,
-			maxPosition.max + 1
+			maxPosition.max + 1,
+			input.installation_id || '',
+			input.daycare_type || '',
+			input.subventionne ? 1 : 0,
+			input.places_poupons ?? null,
+			input.places_18_mois_plus ?? null,
+			input.description || '',
+			input.horaires || ''
 		);
 
 	return getDaycareById(result.lastInsertRowid as number)!;
@@ -247,6 +373,38 @@ export function updateDaycare(id: number, input: Partial<DaycareInput>): Daycare
 	if (input.hidden !== undefined) {
 		updates.push('hidden = ?');
 		values.push(input.hidden ? 1 : 0);
+	}
+	if (input.portal_url !== undefined) {
+		updates.push('portal_url = ?');
+		values.push(input.portal_url);
+	}
+	if (input.installation_id !== undefined) {
+		updates.push('installation_id = ?');
+		values.push(input.installation_id);
+	}
+	if (input.daycare_type !== undefined) {
+		updates.push('daycare_type = ?');
+		values.push(input.daycare_type);
+	}
+	if (input.subventionne !== undefined) {
+		updates.push('subventionne = ?');
+		values.push(input.subventionne ? 1 : 0);
+	}
+	if (input.places_poupons !== undefined) {
+		updates.push('places_poupons = ?');
+		values.push(input.places_poupons);
+	}
+	if (input.places_18_mois_plus !== undefined) {
+		updates.push('places_18_mois_plus = ?');
+		values.push(input.places_18_mois_plus);
+	}
+	if (input.description !== undefined) {
+		updates.push('description = ?');
+		values.push(input.description);
+	}
+	if (input.horaires !== undefined) {
+		updates.push('horaires = ?');
+		values.push(input.horaires);
 	}
 
 	if (updates.length > 0) {
@@ -524,6 +682,7 @@ export function getDaycaresNeedingCommute(homeAddress: string): Daycare[] {
 	return db.prepare(`
 		SELECT * FROM daycares
 		WHERE TRIM(address) IS NOT NULL AND TRIM(address) != ''
+		AND address GLOB '*[0-9]*'
 		AND (
 			commute_origin IS NULL OR commute_origin = '' OR commute_origin != ?
 			OR commute_destination IS NULL OR commute_destination = '' OR commute_destination != address
@@ -549,4 +708,118 @@ export function updateDaycareCommute(
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`).run(commuteMinutes, commuteOrigin, commuteDestination, commuteMapsUrl, id);
+}
+
+// User types
+export interface User {
+	id: number;
+	email: string;
+	password_hash: string;
+	name: string;
+	role: 'admin' | 'owner' | 'user';
+	home_address: string;
+	max_commute_minutes: number;
+	created_at: string;
+}
+
+export interface Session {
+	id: string;
+	user_id: number;
+	expires_at: string;
+	created_at: string;
+}
+
+// User operations
+export function createUser(email: string, passwordHash: string, name: string, homeAddress: string, maxCommuteMinutes: number = 5): User {
+	const result = db.prepare(`
+		INSERT INTO users (email, password_hash, name, home_address, max_commute_minutes)
+		VALUES (?, ?, ?, ?, ?)
+	`).run(email, passwordHash, name, homeAddress, maxCommuteMinutes);
+
+	return getUserById(result.lastInsertRowid as number)!;
+}
+
+export function getUserById(id: number): User | null {
+	return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User | null;
+}
+
+export function getUserByEmail(email: string): User | null {
+	return db.prepare('SELECT * FROM users WHERE email = ?').get(email) as User | null;
+}
+
+export function updateUser(id: number, updates: Partial<Pick<User, 'name' | 'home_address' | 'max_commute_minutes' | 'role'>>): void {
+	const fields: string[] = [];
+	const values: (string | number)[] = [];
+
+	if (updates.name !== undefined) {
+		fields.push('name = ?');
+		values.push(updates.name);
+	}
+	if (updates.home_address !== undefined) {
+		fields.push('home_address = ?');
+		values.push(updates.home_address);
+	}
+	if (updates.max_commute_minutes !== undefined) {
+		fields.push('max_commute_minutes = ?');
+		values.push(updates.max_commute_minutes);
+	}
+	if (updates.role !== undefined) {
+		fields.push('role = ?');
+		values.push(updates.role);
+	}
+
+	if (fields.length > 0) {
+		values.push(id);
+		db.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+	}
+}
+
+// Session operations
+export function createSession(userId: number, sessionId: string, expiresAt: Date): Session {
+	db.prepare(`
+		INSERT INTO sessions (id, user_id, expires_at)
+		VALUES (?, ?, ?)
+	`).run(sessionId, userId, expiresAt.toISOString());
+
+	return getSessionById(sessionId)!;
+}
+
+export function getSessionById(id: string): (Session & { user: User }) | null {
+	const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Session | null;
+	if (!session) return null;
+
+	// Check if expired
+	if (new Date(session.expires_at) < new Date()) {
+		deleteSession(id);
+		return null;
+	}
+
+	const user = getUserById(session.user_id);
+	if (!user) {
+		deleteSession(id);
+		return null;
+	}
+
+	return { ...session, user };
+}
+
+export function deleteSession(id: string): void {
+	db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+}
+
+export function deleteExpiredSessions(): void {
+	db.prepare('DELETE FROM sessions WHERE expires_at < datetime("now")').run();
+}
+
+// Daycare ownership
+export function claimDaycare(daycareId: number, userId: number): void {
+	db.prepare('UPDATE daycares SET owner_id = ? WHERE id = ?').run(userId, daycareId);
+}
+
+export function unclaimDaycare(daycareId: number): void {
+	db.prepare('UPDATE daycares SET owner_id = NULL WHERE id = ?').run(daycareId);
+}
+
+export function getDaycaresByOwner(userId: number): Daycare[] {
+	return db.prepare('SELECT * FROM daycares WHERE owner_id = ?').all(userId) as Daycare[];
 }

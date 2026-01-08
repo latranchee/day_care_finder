@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
+	import LoadingSpinner from './LoadingSpinner.svelte';
 
 	interface Props {
 		onImport: () => void;
@@ -94,8 +95,7 @@
 			/>
 
 			{#if importing}
-				<div class="spinner"></div>
-				<p>{m.import_importing()}</p>
+				<LoadingSpinner size="lg" />
 			{:else}
 				<svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -185,20 +185,6 @@ Happy Kids,123 Main St,555-1234,https://facebook.com/happykids,https://example.c
 	.drop-text {
 		color: var(--text-secondary);
 		margin: 0;
-	}
-
-	.spinner {
-		width: 32px;
-		height: 32px;
-		border: 3px solid var(--border-color);
-		border-top-color: var(--accent);
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-		margin: 0 auto 0.75rem;
-	}
-
-	@keyframes spin {
-		to { transform: rotate(360deg); }
 	}
 
 	.message {

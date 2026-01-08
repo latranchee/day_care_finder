@@ -44,6 +44,100 @@
 	}
 }
 
+/* Loading animation - bouncing blocks */
+@keyframes bounce {
+	0%, 100% { transform: translateY(0); }
+	50% { transform: translateY(-8px); }
+}
+
+@keyframes wiggle {
+	0%, 100% { transform: rotate(-5deg); }
+	50% { transform: rotate(5deg); }
+}
+
+/* Loading spinner component */
+.loading-spinner {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.loading-spinner.inline {
+	flex-direction: row;
+	gap: 0.25rem;
+}
+
+.loading-dots {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.loading-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 3px;
+	animation: bounce 0.6s ease-in-out infinite;
+}
+
+.loading-dot:nth-child(1) {
+	background: var(--accent);
+	animation-delay: 0s;
+}
+
+.loading-dot:nth-child(2) {
+	background: #5f7a5f;
+	animation-delay: 0.1s;
+}
+
+.loading-dot:nth-child(3) {
+	background: #d4956a;
+	animation-delay: 0.2s;
+}
+
+/* Size variants */
+.loading-spinner.sm .loading-dot {
+	width: 8px;
+	height: 8px;
+}
+
+.loading-spinner.lg .loading-dot {
+	width: 14px;
+	height: 14px;
+}
+
+.loading-spinner.lg .loading-dots {
+	gap: 8px;
+}
+
+.loading-message {
+	font-size: 0.875rem;
+	color: var(--text-secondary);
+	font-style: italic;
+	animation: fadeIn 0.3s ease-out;
+}
+
+.loading-spinner.sm .loading-message {
+	font-size: 0.75rem;
+}
+
+.loading-spinner.lg .loading-message {
+	font-size: 1rem;
+}
+
+/* Overlay mode */
+.loading-overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(255, 252, 248, 0.9);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: inherit;
+	z-index: 10;
+}
+
 .modal-close {
 	position: absolute;
 	top: 1rem;

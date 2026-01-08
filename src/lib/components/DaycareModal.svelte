@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Daycare, Note, Review, Contact, ContactInput, DaycareInput } from '$lib/types';
 	import Markdown from './Markdown.svelte';
+	import LoadingSpinner from './LoadingSpinner.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import PhoneIcon from './icons/PhoneIcon.svelte';
@@ -8,20 +9,27 @@
 	import FacebookIcon from './icons/FacebookIcon.svelte';
 	import { formatDate as formatDateUtil, truncateText } from '$lib/utils/formatting';
 
+	interface User {
+		id: number;
+		email: string;
+		name: string | null;
+		role: string;
+	}
+
 	interface Props {
 		daycare: Daycare | null;
 		onClose: () => void;
 		onSave: (id: number, data: Partial<DaycareInput>) => void;
 		onDelete: (id: number) => void;
 		onReviewsChange?: () => void;
+		user?: User | null;
 	}
 
-	let { daycare, onClose, onSave, onDelete, onReviewsChange }: Props = $props();
+	let { daycare, onClose, onSave, onDelete, onReviewsChange, user }: Props = $props();
 
 	let isEditing = $state(false);
 	let notes = $state<Note[]>([]);
 	let newNote = $state('');
-	let noteUsername = $state('');
 	let loadingNotes = $state(false);
 	let expandedNotes = $state<Set<number>>(new Set());
 	let showNoteForm = $state(false);
@@ -36,6 +44,12 @@
 	let editContactForm = $state<ContactInput>({ name: '', role: '', phone: '', email: '', notes: '', is_primary: false });
 	let showContactForm = $state(false);
 	let editForm = $state<Partial<DaycareInput>>({});
+
+	// Loading states for async actions
+	let isAddingNote = $state(false);
+	let isAddingReview = $state(false);
+	let isAddingContact = $state(false);
+	let isSavingContact = $state(false);
 
 	$effect(() => {
 		if (daycare) {
@@ -57,14 +71,6 @@
 		}
 	});
 
-	// Load username from localStorage on mount
-	$effect(() => {
-		if (typeof window !== 'undefined') {
-			const saved = localStorage.getItem('noteUsername');
-			if (saved) noteUsername = saved;
-		}
-	});
-
 	async function loadNotes() {
 		if (!daycare) return;
 		loadingNotes = true;
@@ -78,25 +84,24 @@
 	}
 
 	async function addNote() {
-		if (!daycare || !newNote.trim()) return;
+		if (!daycare || !newNote.trim() || isAddingNote || !user) return;
+		isAddingNote = true;
 		try {
 			const res = await fetch(`/api/daycares/${daycare.id}/notes`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ content: newNote.trim(), username: noteUsername.trim() || undefined })
+				body: JSON.stringify({ content: newNote.trim() })
 			});
 			if (res.ok) {
 				const note = await res.json();
 				notes = [note, ...notes];
 				newNote = '';
 				showNoteForm = false;
-				// Save username to localStorage for next time
-				if (noteUsername.trim()) {
-					localStorage.setItem('noteUsername', noteUsername.trim());
-				}
 			}
 		} catch (e) {
 			console.error('Failed to add note:', e);
+		} finally {
+			isAddingNote = false;
 		}
 	}
 
@@ -124,7 +129,8 @@
 	}
 
 	async function addReview() {
-		if (!daycare || !newReview.text.trim()) return;
+		if (!daycare || !newReview.text.trim() || isAddingReview) return;
+		isAddingReview = true;
 		try {
 			const res = await fetch(`/api/daycares/${daycare.id}/reviews`, {
 				method: 'POST',
@@ -144,6 +150,8 @@
 			}
 		} catch (e) {
 			console.error('Failed to add review:', e);
+		} finally {
+			isAddingReview = false;
 		}
 	}
 
@@ -172,7 +180,8 @@
 	}
 
 	async function addContact() {
-		if (!daycare || !newContact.name.trim()) return;
+		if (!daycare || !newContact.name.trim() || isAddingContact) return;
+		isAddingContact = true;
 		try {
 			const res = await fetch(`/api/daycares/${daycare.id}/contacts`, {
 				method: 'POST',
@@ -191,6 +200,8 @@
 			}
 		} catch (e) {
 			console.error('Failed to add contact:', e);
+		} finally {
+			isAddingContact = false;
 		}
 	}
 
@@ -207,7 +218,8 @@
 	}
 
 	async function saveContact() {
-		if (editingContactId === null || !editContactForm.name?.trim()) return;
+		if (editingContactId === null || !editContactForm.name?.trim() || isSavingContact) return;
+		isSavingContact = true;
 		try {
 			const res = await fetch(`/api/contacts/${editingContactId}`, {
 				method: 'PUT',
@@ -226,6 +238,8 @@
 			}
 		} catch (e) {
 			console.error('Failed to update contact:', e);
+		} finally {
+			isSavingContact = false;
 		}
 	}
 
@@ -370,7 +384,7 @@
 								{/if}
 
 								<!-- Quick action icons -->
-								{#if daycare.phone || daycare.email || daycare.website || daycare.facebook}
+								{#if daycare.phone || daycare.email || daycare.website || daycare.facebook || daycare.portal_url}
 									<div class="quick-links">
 										{#if daycare.phone}
 											<a href="tel:{daycare.phone}" class="quick-link" title={daycare.phone}>
@@ -394,6 +408,17 @@
 										{#if daycare.facebook}
 											<a href={daycare.facebook} target="_blank" rel="noopener" class="quick-link" title="Facebook">
 												<FacebookIcon size={20} />
+											</a>
+										{/if}
+										{#if daycare.portal_url}
+											<a href={daycare.portal_url} target="_blank" rel="noopener" class="quick-link portal-link" title="Portail gouvernemental">
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+													<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+													<polyline points="14 2 14 8 20 8"/>
+													<line x1="16" y1="13" x2="8" y2="13"/>
+													<line x1="16" y1="17" x2="8" y2="17"/>
+													<polyline points="10 9 9 9 8 9"/>
+												</svg>
 											</a>
 										{/if}
 									</div>
@@ -472,43 +497,45 @@
 				<div class="modal-sidebar">
 					<h3 class="notes-title">{m.section_notes({ count: notes.length })}</h3>
 
-					{#if showNoteForm}
-						<div class="note-input">
-							<input
-								type="text"
-								bind:value={noteUsername}
-								placeholder={m.placeholder_your_name()}
-								class="username-input"
-							/>
-							<textarea
-								bind:value={newNote}
-								placeholder={m.placeholder_add_note()}
-								rows="3"
-							></textarea>
-							<div class="note-form-actions">
-								<button
-									class="btn btn-secondary btn-sm"
-									onclick={() => { showNoteForm = false; newNote = ''; }}
-								>
-									{m.btn_cancel()}
-								</button>
-								<button
-									class="btn btn-primary btn-sm"
-									onclick={addNote}
-									disabled={!newNote.trim()}
-								>
-									{m.btn_add_note()}
-								</button>
+					{#if user}
+						{#if showNoteForm}
+							<div class="note-input">
+								<textarea
+									bind:value={newNote}
+									placeholder={m.placeholder_add_note()}
+									rows="3"
+								></textarea>
+								<div class="note-form-actions">
+									<button
+										class="btn btn-secondary btn-sm"
+										onclick={() => { showNoteForm = false; newNote = ''; }}
+									>
+										{m.btn_cancel()}
+									</button>
+									<button
+										class="btn btn-primary btn-sm"
+										onclick={addNote}
+										disabled={!newNote.trim() || isAddingNote}
+									>
+										{#if isAddingNote}
+											<LoadingSpinner mode="inline" size="sm" showMessage={false} />
+										{:else}
+											{m.btn_add_note()}
+										{/if}
+									</button>
+								</div>
 							</div>
-						</div>
+						{:else}
+							<button class="btn btn-secondary btn-sm add-note-btn" onclick={() => showNoteForm = true}>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="add-icon">
+									<line x1="12" y1="5" x2="12" y2="19"/>
+									<line x1="5" y1="12" x2="19" y2="12"/>
+								</svg>
+								{m.btn_add_note()}
+							</button>
+						{/if}
 					{:else}
-						<button class="btn btn-secondary btn-sm add-note-btn" onclick={() => showNoteForm = true}>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="add-icon">
-								<line x1="12" y1="5" x2="12" y2="19"/>
-								<line x1="5" y1="12" x2="19" y2="12"/>
-							</svg>
-							{m.btn_add_note()}
-						</button>
+						<p class="login-required">{m.notes_login_required()}</p>
 					{/if}
 
 					<div class="notes-list">
@@ -602,9 +629,13 @@
 								<button
 									class="btn btn-primary btn-sm"
 									onclick={addContact}
-									disabled={!newContact.name.trim()}
+									disabled={!newContact.name.trim() || isAddingContact}
 								>
-									{m.btn_add_contact()}
+									{#if isAddingContact}
+										<LoadingSpinner mode="inline" size="sm" showMessage={false} />
+									{:else}
+										{m.btn_add_contact()}
+									{/if}
 								</button>
 							</div>
 						</div>
@@ -664,7 +695,13 @@
 											</label>
 											<div class="contact-edit-actions">
 												<button class="btn btn-sm btn-secondary" onclick={cancelEditContact}>{m.btn_cancel()}</button>
-												<button class="btn btn-sm btn-primary" onclick={saveContact} disabled={!editContactForm.name?.trim()}>{m.btn_save_short()}</button>
+												<button class="btn btn-sm btn-primary" onclick={saveContact} disabled={!editContactForm.name?.trim() || isSavingContact}>
+													{#if isSavingContact}
+														<LoadingSpinner mode="inline" size="sm" showMessage={false} />
+													{:else}
+														{m.btn_save_short()}
+													{/if}
+												</button>
 											</div>
 										</div>
 									{:else}
@@ -758,9 +795,13 @@
 								<button
 									class="btn btn-primary btn-sm"
 									onclick={addReview}
-									disabled={!newReview.text.trim()}
+									disabled={!newReview.text.trim() || isAddingReview}
 								>
-									{m.btn_add_review()}
+									{#if isAddingReview}
+										<LoadingSpinner mode="inline" size="sm" showMessage={false} />
+									{:else}
+										{m.btn_add_review()}
+									{/if}
 								</button>
 							</div>
 						</div>
@@ -922,6 +963,16 @@
 		height: 20px;
 	}
 
+	.quick-link.portal-link {
+		background: #e8f4f8;
+		color: #0369a1;
+	}
+
+	.quick-link.portal-link:hover {
+		background: #0369a1;
+		color: white;
+	}
+
 	.info-grid {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
@@ -1050,18 +1101,14 @@
 		align-items: center;
 	}
 
-	.username-input {
-		padding: 0.5rem 0.75rem;
-		border: 1px solid var(--border-color);
-		border-radius: 8px;
+	.login-required {
 		font-size: 0.85rem;
-		background: white;
-		color: var(--text-primary);
-	}
-
-	.username-input:focus {
-		outline: none;
-		border-color: var(--accent);
+		color: var(--text-secondary);
+		text-align: center;
+		padding: 0.75rem;
+		margin-bottom: 1rem;
+		background: #f5f1eb;
+		border-radius: 8px;
 	}
 
 	.note-meta {

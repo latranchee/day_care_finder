@@ -6,6 +6,7 @@ export interface Daycare {
 	email: string;
 	facebook: string;
 	website: string;
+	portal_url: string;
 	capacity: number | null;
 	price: string;
 	hours: string;
@@ -21,6 +22,14 @@ export interface Daycare {
 	commute_calculated_at: string | null;
 	created_at: string;
 	updated_at: string;
+	// Extended fields from portal
+	installation_id: string;
+	daycare_type: string;
+	subventionne: boolean;
+	places_poupons: number | null;
+	places_18_mois_plus: number | null;
+	description: string;
+	horaires: string;
 }
 
 export interface Note {
@@ -99,6 +108,7 @@ export interface DaycareInput {
 	email?: string;
 	facebook?: string;
 	website?: string;
+	portal_url?: string;
 	capacity?: number | null;
 	price?: string;
 	hours?: string;
@@ -106,6 +116,14 @@ export interface DaycareInput {
 	rating?: number | null;
 	stage?: Stage;
 	hidden?: boolean;
+	// Extended fields from portal
+	installation_id?: string;
+	daycare_type?: string;
+	subventionne?: boolean;
+	places_poupons?: number | null;
+	places_18_mois_plus?: number | null;
+	description?: string;
+	horaires?: string;
 }
 
 // Extended daycare type with related data for display
@@ -126,4 +144,17 @@ export interface CardSettings {
 	showContacts: boolean;
 	showReview: boolean;
 	showCommuteTime: boolean;
+	showSubsidized: boolean;
+}
+
+// Filter settings for hiding/showing daycares based on criteria
+export interface FilterSettings {
+	maxCommuteMinutes: number | null;
+	requireReviews: boolean;
+	subsidizedOnly: boolean;
+	minRating: number | null;
+	requirePhone: boolean;
+	requireEmail: boolean;
+	requireWebsite: boolean;
+	requireFacebook: boolean;
 }

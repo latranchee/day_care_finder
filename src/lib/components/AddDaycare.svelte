@@ -1,14 +1,16 @@
 <script lang="ts">
 	import type { DaycareInput } from '$lib/types';
 	import * as m from '$lib/paraglide/messages.js';
+	import LoadingSpinner from './LoadingSpinner.svelte';
 
 	interface Props {
-		onAdd: (data: DaycareInput) => void;
+		onAdd: (data: DaycareInput) => void | Promise<void>;
 		onClose: () => void;
 	}
 
 	let { onAdd, onClose }: Props = $props();
 
+	let isSubmitting = $state(false);
 	let form = $state<DaycareInput>({
 		name: '',
 		address: '',
@@ -22,10 +24,15 @@
 		rating: null
 	});
 
-	function handleSubmit(e: Event) {
+	async function handleSubmit(e: Event) {
 		e.preventDefault();
-		if (form.name.trim()) {
-			onAdd(form);
+		if (form.name.trim() && !isSubmitting) {
+			isSubmitting = true;
+			try {
+				await onAdd(form);
+			} finally {
+				isSubmitting = false;
+			}
 		}
 	}
 </script>
@@ -95,8 +102,14 @@
 			</div>
 
 			<div class="form-actions">
-				<button type="button" class="btn btn-secondary" onclick={onClose}>{m.btn_cancel()}</button>
-				<button type="submit" class="btn btn-primary" disabled={!form.name.trim()}>{m.btn_add_daycare()}</button>
+				<button type="button" class="btn btn-secondary" onclick={onClose} disabled={isSubmitting}>{m.btn_cancel()}</button>
+				<button type="submit" class="btn btn-primary" disabled={!form.name.trim() || isSubmitting}>
+					{#if isSubmitting}
+						<LoadingSpinner mode="inline" size="sm" showMessage={false} />
+					{:else}
+						{m.btn_add_daycare()}
+					{/if}
+				</button>
 			</div>
 		</form>
 	</div>

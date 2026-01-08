@@ -75,6 +75,11 @@
 		{#if cardSettings.showPrice && daycare.price}
 			<span class="meta-tag price">{daycare.price}</span>
 		{/if}
+		{#if cardSettings.showSubsidized}
+			<span class="meta-tag subsidized" class:yes={daycare.subventionne} title={daycare.subventionne ? m.subsidized_yes() : m.subsidized_no()}>
+				{daycare.subventionne ? m.subsidized_yes() : m.subsidized_no()}
+			</span>
+		{/if}
 		{#if cardSettings.showAgeRange && daycare.age_range}
 			<span class="meta-tag age">{daycare.age_range}</span>
 		{/if}
@@ -131,7 +136,7 @@
 					target="_blank"
 					rel="noopener noreferrer"
 					class="meta-tag commute commute-link"
-					title="Open directions in Google Maps"
+					title={m.commute_open_maps()}
 					onclick={(e) => e.stopPropagation()}
 				>
 					<svg class="commute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -141,7 +146,7 @@
 					{daycare.commute_minutes} min
 				</a>
 			{:else}
-				<span class="meta-tag commute" title="Commute time from home">
+				<span class="meta-tag commute" title={m.commute_time_from_home()}>
 					<svg class="commute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<circle cx="12" cy="12" r="10"/>
 						<polyline points="12 6 12 12 16 14"/>
@@ -233,6 +238,16 @@
 		align-items: flex-start;
 		gap: 0.5rem;
 		margin-bottom: 0.5rem;
+	}
+
+	.meta-tag.subsidized {
+		background: #fee2e2;
+		color: #b91c1c;
+	}
+
+	.meta-tag.subsidized.yes {
+		background: #d1fae5;
+		color: #047857;
 	}
 
 	.card-title {

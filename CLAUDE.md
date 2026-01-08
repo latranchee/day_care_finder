@@ -74,3 +74,46 @@ This app contains French Canadian text with accented characters (é, è, ê, à,
 
 ### Testing:
 - Verify French text like "Siège social", "Développement", "sécurisant" displays correctly
+
+## Mandatory: Localization (i18n)
+
+This app uses **Paraglide.js** for internationalization (English and French). **All user-facing text MUST be localized.**
+
+### Translation Files
+- `messages/en.json` - English translations
+- `messages/fr.json` - French translations
+
+### How to Use
+
+1. **Import messages** in your Svelte component:
+   ```ts
+   import * as m from '$lib/paraglide/messages.js';
+   ```
+
+2. **Use translation functions** instead of hardcoded strings:
+   ```svelte
+   <!-- WRONG -->
+   <button>Save Changes</button>
+   <span title="Open settings">...</span>
+
+   <!-- CORRECT -->
+   <button>{m.btn_save()}</button>
+   <span title={m.settings_title()}>...</span>
+   ```
+
+3. **For dynamic content with variables**, use parameterized messages:
+   ```json
+   // In messages/en.json
+   "commute_progress": "Calculating {current} of {total}: {name}"
+   ```
+   ```svelte
+   {m.commute_progress({ current: 5, total: 10, name: "Garderie ABC" })}
+   ```
+
+### Rules
+
+- **NEVER hardcode user-facing text** in `.svelte` files
+- This includes: button labels, headings, placeholders, title attributes, error messages, status messages
+- When adding new features, add translation keys to BOTH `en.json` AND `fr.json`
+- Keep translation keys descriptive: `btn_save`, `label_address`, `error_save_failed`
+- Run `npm run check` to ensure Paraglide generates the message functions correctly
