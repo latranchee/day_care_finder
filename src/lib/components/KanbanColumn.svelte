@@ -119,17 +119,22 @@
 	}
 
 	.column-content {
-		flex: 1;
 		padding: 0.75rem;
 		overflow-y: auto;
-		min-height: 200px;
+		min-height: 100px;
 		display: flex;
 		flex-direction: column;
 		gap: 0.625rem;
 	}
 
-	.card-wrapper {
-		/* No animations - keep it snappy */
+	/* Hide shadow placeholder so column can shrink */
+	.column-content > :global([data-is-dnd-shadow-item-hint]) {
+		display: none !important;
+	}
+
+	/* Take dragged element out of flow so column shrinks immediately while card remains visible */
+	.column-content > :global([data-is-dnd-dragged-el]) {
+		position: fixed !important;
 	}
 
 	/* Scrollbar styling */

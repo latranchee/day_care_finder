@@ -2,21 +2,29 @@
 	import Modal from './Modal.svelte';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 	import ImportCSV from './ImportCSV.svelte';
+	import AddDaycare from './AddDaycare.svelte';
 	import * as m from '$lib/paraglide/messages.js';
-	import type { AdminFamilyResponse, AdminChildDetails, Stage } from '$lib/types';
+	import type { AdminFamilyResponse, AdminChildDetails, Stage, DaycareInput } from '$lib/types';
 
 	interface Props {
 		onClose: () => void;
 		onImport: () => void;
+		onAddDaycare: (data: DaycareInput) => void | Promise<void>;
 	}
 
-	let { onClose, onImport }: Props = $props();
+	let { onClose, onImport, onAddDaycare }: Props = $props();
 
 	let showImport = $state(false);
+	let showAddDaycare = $state(false);
 
 	function handleImportComplete() {
 		showImport = false;
 		onImport();
+	}
+
+	async function handleAddDaycareComplete(data: DaycareInput) {
+		await onAddDaycare(data);
+		showAddDaycare = false;
 	}
 
 	let loading = $state(true);
@@ -96,16 +104,30 @@
 		{:else if error}
 			<div class="error-state">{error}</div>
 		{:else if data}
-			<div class="admin-header">
+			<div class="admin-section">
+				<h3 class="section-title">{m.admin_section_daycares()}</h3>
+				<div class="admin-actions">
+					<button class="btn-admin-action btn-primary" onclick={() => showAddDaycare = true}>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<line x1="12" y1="5" x2="12" y2="19"/>
+							<line x1="5" y1="12" x2="19" y2="12"/>
+						</svg>
+						{m.btn_add_daycare()}
+					</button>
+					<button class="btn-admin-action" onclick={() => showImport = true}>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+							<polyline points="17 8 12 3 7 8"/>
+							<line x1="12" y1="3" x2="12" y2="15"/>
+						</svg>
+						{m.btn_import_csv()}
+					</button>
+				</div>
+			</div>
+
+			<div class="admin-section">
+				<h3 class="section-title">{m.admin_section_users()}</h3>
 				<span class="user-count">{m.admin_users_count({ count: data.users.length })}</span>
-				<button class="btn-import" onclick={() => showImport = true}>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-						<polyline points="17 8 12 3 7 8"/>
-						<line x1="12" y1="3" x2="12" y2="15"/>
-					</svg>
-					{m.btn_import_csv()}
-				</button>
 			</div>
 
 			{#if data.users.length === 0}
@@ -185,6 +207,13 @@
 	/>
 {/if}
 
+{#if showAddDaycare}
+	<AddDaycare
+		onAdd={handleAddDaycareComplete}
+		onClose={() => showAddDaycare = false}
+	/>
+{/if}
+
 <style>
 	.admin-content {
 		padding: 1.5rem 2rem 2rem;
@@ -215,13 +244,19 @@
 		color: var(--danger-color);
 	}
 
-	.admin-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 1rem;
-		padding-bottom: 0.75rem;
+	.admin-section {
+		margin-bottom: 1.25rem;
+		padding-bottom: 1rem;
 		border-bottom: 1px solid var(--border-color);
+	}
+
+	.section-title {
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-secondary);
+		margin: 0 0 0.75rem 0;
 	}
 
 	.user-count {
@@ -229,26 +264,43 @@
 		color: var(--text-secondary);
 	}
 
-	.btn-import {
+	.admin-actions {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.btn-admin-action {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 1rem;
-		background: var(--accent);
-		color: white;
-		border: none;
+		background: #f5f1eb;
+		color: var(--text-primary);
+		border: 1px solid var(--border-color);
 		border-radius: 8px;
 		font-size: 0.875rem;
 		font-weight: 500;
 		cursor: pointer;
-		transition: background-color 0.15s;
+		transition: all 0.15s;
 	}
 
-	.btn-import:hover {
+	.btn-admin-action:hover {
+		background: #ebe5db;
+		border-color: #d8cfc4;
+	}
+
+	.btn-admin-action.btn-primary {
+		background: var(--accent);
+		color: white;
+		border-color: var(--accent);
+	}
+
+	.btn-admin-action.btn-primary:hover {
 		background: var(--accent-hover, #b36a3e);
+		border-color: var(--accent-hover, #b36a3e);
 	}
 
-	.btn-import svg {
+	.btn-admin-action svg {
 		width: 16px;
 		height: 16px;
 	}

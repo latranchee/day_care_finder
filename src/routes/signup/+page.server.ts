@@ -1,6 +1,8 @@
 import { redirect, fail } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import type { Actions, PageServerLoad } from './$types';
 import { signup } from '$lib/server/auth';
+import { checkRateLimit, AUTH_RATE_LIMIT } from '$lib/server/rate-limit';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	// Redirect if already logged in
@@ -10,7 +12,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async (event) => {
+		const { request, cookies } = event;
+
+		// Check rate limit before processing signup attempt
+		const rateLimitResult = checkRateLimit(event, AUTH_RATE_LIMIT);
+		if (!rateLimitResult.allowed) {
+			return fail(429, {
+				error: 'Too many signup attempts. Please try again later.',
+				retryAfter: rateLimitResult.retryAfter
+			});
+		}
+
 		const data = await request.formData();
 		const email = data.get('email')?.toString() || '';
 		const password = data.get('password')?.toString() || '';
@@ -42,6 +55,7 @@ export const actions: Actions = {
 			path: '/',
 			httpOnly: true,
 			sameSite: 'lax',
+			secure: !dev,
 			maxAge: 60 * 60 * 24 * 30 // 30 days
 		});
 

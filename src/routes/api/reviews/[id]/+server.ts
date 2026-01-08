@@ -1,23 +1,29 @@
-import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { deleteReview, getReviewDaycareId, recalculateDaycareRating } from '$lib/server/db';
 import { parseIdParam } from '$lib/server/validation';
+import { deleted, notFound } from '$lib/server/api-utils';
+import { requireAuth, requireDaycareAccess } from '$lib/server/authorization';
 
-export const DELETE: RequestHandler = async ({ params }) => {
-	const id = parseIdParam(params);
+export const DELETE: RequestHandler = async (event) => {
+	const user = requireAuth(event);
+	const id = parseIdParam(event.params);
 
 	// Get the daycare ID before deleting so we can recalculate rating
 	const daycareId = getReviewDaycareId(id);
+	if (!daycareId) {
+		notFound('Review');
+	}
 
-	const success = deleteReview(id);
-	if (!success) {
-		throw error(404, 'Review not found');
+	// Verify user has access to this review's daycare
+	requireDaycareAccess(user.id, daycareId);
+
+	const result = deleteReview(id);
+	if (!result) {
+		notFound('Review');
 	}
 
 	// Recalculate the daycare's average rating
-	if (daycareId) {
-		recalculateDaycareRating(daycareId);
-	}
+	recalculateDaycareRating(daycareId);
 
-	return json({ success: true });
+	return deleted();
 };

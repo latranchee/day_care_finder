@@ -44,10 +44,20 @@
 	}
 }
 
-/* Loading animation - bouncing blocks */
+/* Loading animation - bouncing blocks with squish */
 @keyframes bounce {
-	0%, 100% { transform: translateY(0); }
-	50% { transform: translateY(-8px); }
+	0%, 100% {
+		transform: translateY(0) scaleX(1.15) scaleY(0.85);
+	}
+	30% {
+		transform: translateY(-12px) scaleX(0.85) scaleY(1.15);
+	}
+	50% {
+		transform: translateY(-14px) scaleX(0.9) scaleY(1.1);
+	}
+	70% {
+		transform: translateY(-12px) scaleX(0.85) scaleY(1.15);
+	}
 }
 
 @keyframes wiggle {
@@ -230,6 +240,160 @@
 	height: 18px;
 }
 
+/* Icon-only button - square button with just an icon */
+.btn-icon-only {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.625rem;
+	border: none;
+	border-radius: 10px;
+	background: #f0ebe4;
+	color: #5a4d3d;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.btn-icon-only:hover {
+	background: #e8e2d9;
+}
+
+.btn-icon-only.active {
+	background: #d8cfc4;
+	color: var(--text-primary);
+}
+
+/* Wide add button - full-width button with icon for adding items */
+.btn-add-wide {
+	width: 100%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.375rem;
+	margin-bottom: 1rem;
+}
+
+.btn-add-wide .add-icon {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+}
+
+/* Show more/less link button */
+.btn-show-more {
+	background: none;
+	border: none;
+	color: var(--accent);
+	font-size: 0.8rem;
+	font-weight: 500;
+	cursor: pointer;
+	padding: 0;
+	margin-top: 0.25rem;
+}
+
+.btn-show-more:hover {
+	text-decoration: underline;
+}
+
+/* Settings action button - primary colored with icon */
+.btn-settings {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	width: 100%;
+	padding: 0.625rem;
+	background: var(--accent);
+	color: white;
+	border: none;
+	border-radius: 8px;
+	font-size: 0.875rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.btn-settings:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+
+.btn-settings:disabled {
+	background: #d8cfc4;
+	cursor: not-allowed;
+}
+
+.btn-settings svg {
+	width: 16px;
+	height: 16px;
+}
+
+.btn-settings .spinner {
+	animation: spin 1s linear infinite;
+}
+
+/* Rating selector buttons */
+.btn-rating {
+	flex: 1;
+	padding: 0.5rem 0.75rem;
+	font-size: 0.8rem;
+	font-weight: 500;
+	color: var(--text-secondary);
+	background: #f5f1eb;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.btn-rating:hover {
+	background: #ebe5db;
+}
+
+.btn-rating.active {
+	background: var(--accent);
+	color: white;
+}
+
+/* Language toggle buttons */
+.btn-lang {
+	flex: 1;
+	padding: 0.5rem;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	background: white;
+	color: #5a4d3d;
+	font-size: 0.875rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.btn-lang:hover {
+	border-color: var(--accent);
+}
+
+.btn-lang.active {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: white;
+}
+
+/* Clear all link button */
+.btn-clear-link {
+	margin-left: auto;
+	font-size: 0.7rem;
+	color: var(--accent);
+	background: none;
+	border: none;
+	cursor: pointer;
+	text-decoration: underline;
+	padding: 0;
+}
+
+.btn-clear-link:hover {
+	color: #a35f3a;
+}
+
 /* =============================================
    Form Group Patterns
    Used in: DaycareModal, AddDaycare
@@ -286,4 +450,59 @@
 	.form-row {
 		grid-template-columns: 1fr;
 	}
+}
+
+/* =============================================
+   Section Titles (Notes, Reviews, Contacts)
+   Used in: DaycareModal
+   ============================================= */
+.section-title {
+	font-family: 'DM Sans', system-ui, sans-serif;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--text-primary);
+	margin: 0 0 1rem 0;
+}
+
+/* =============================================
+   Item Delete Button (Notes, Reviews, Contacts)
+   Used in: DaycareModal
+   ============================================= */
+.item-delete-btn {
+	background: none;
+	border: none;
+	font-size: 1.25rem;
+	color: var(--text-secondary);
+	cursor: pointer;
+	padding: 0 0.25rem;
+	line-height: 1;
+	opacity: 0.5;
+	transition: opacity 0.15s ease;
+}
+
+.item-delete-btn:hover {
+	opacity: 1;
+	color: #c44e4e;
+}
+
+/* =============================================
+   Items List Container (Notes, Reviews, Contacts)
+   Used in: DaycareModal
+   ============================================= */
+.items-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+/* =============================================
+   Loading and Empty States
+   Used in: DaycareModal
+   ============================================= */
+.state-loading,
+.state-empty {
+	font-size: 0.875rem;
+	color: var(--text-secondary);
+	text-align: center;
+	padding: 2rem 0;
 }

@@ -26,6 +26,7 @@
 		"vite": "^7.2.6"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.71.2",
 		"@inlang/paraglide-js": "^2.7.2",
 		"@types/bcrypt": "^6.0.0",
 		"bcrypt": "^6.0.0",

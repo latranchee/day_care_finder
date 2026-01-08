@@ -6,7 +6,6 @@
 	import { DEFAULT_CARD_SETTINGS, DEFAULT_FILTER_SETTINGS, STAGE_LABELS } from '$lib/constants';
 	import KanbanColumn from '$lib/components/KanbanColumn.svelte';
 	import DaycareModal from '$lib/components/DaycareModal.svelte';
-	import AddDaycare from '$lib/components/AddDaycare.svelte';
 	import LandingPage from '$lib/components/LandingPage.svelte';
 	import ChildSelector from '$lib/components/ChildSelector.svelte';
 	import ChildModal from '$lib/components/ChildModal.svelte';
@@ -15,6 +14,7 @@
 	import AddressAutocomplete from '$lib/components/AddressAutocomplete.svelte';
 	import AdminModal from '$lib/components/AdminModal.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import { fly } from 'svelte/transition';
 	import * as m from '$lib/paraglide/messages.js';
 	import { getLocale, setLocale, locales } from '$lib/paraglide/runtime.js';
 
@@ -48,7 +48,6 @@
 	) as Record<Stage, DaycareWithExtras[]>;
 	let columns = $state<Record<Stage, DaycareWithExtras[]>>(emptyColumns);
 	let selectedDaycare = $state<Daycare | null>(null);
-	let showAddDaycare = $state(false);
 	let showHidden = $state(false);
 	let showSettings = $state(false);
 	let settingsContainer = $state<HTMLDivElement | null>(null);
@@ -63,6 +62,7 @@
 	let showShareChild = $state(false);
 	let managingChild = $state<ChildWithDetails | null>(null);
 	let childInvitation = $state<Invitation | null>(null);
+	let isLoadingInvitation = $state(false);
 
 	// Search state
 	let searchQuery = $state('');
@@ -262,7 +262,6 @@
 			});
 
 			if (res.ok) {
-				showAddDaycare = false;
 				invalidateAll();
 			}
 		} catch (err) {
@@ -370,7 +369,11 @@
 
 	async function handleManageChild(child: ChildWithDetails) {
 		managingChild = child;
-		// Load invitation for this child
+		childInvitation = null;
+		isLoadingInvitation = true;
+		showShareChild = true;
+
+		// Load invitation for this child in the background
 		try {
 			const res = await fetch(`/api/children/${child.id}/invitation`);
 			if (res.ok) {
@@ -380,8 +383,9 @@
 			}
 		} catch {
 			childInvitation = null;
+		} finally {
+			isLoadingInvitation = false;
 		}
-		showShareChild = true;
 	}
 
 	async function handleSaveChild(input: ChildInput) {
@@ -716,7 +720,10 @@
 					</svg>
 				</button>
 				{#if showSettings}
-					<div class="settings-dropdown">
+					<div
+						class="settings-dropdown"
+						transition:fly={{ y: -8, duration: 200 }}
+					>
 						<div class="settings-section">
 							<div class="settings-header">{m.settings_card_display()}</div>
 							<div class="settings-chips">
@@ -950,13 +957,6 @@
 					</div>
 				{/if}
 			</div>
-			<button class="btn btn-primary" onclick={() => showAddDaycare = true}>
-				<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<line x1="12" y1="5" x2="12" y2="19"/>
-					<line x1="5" y1="12" x2="19" y2="12"/>
-				</svg>
-				{m.btn_add_daycare()}
-			</button>
 
 			<div class="auth-section">
 				{#if data.user}
@@ -996,13 +996,6 @@
 	user={data.user}
 />
 
-{#if showAddDaycare}
-	<AddDaycare
-		onAdd={handleAddDaycare}
-		onClose={() => showAddDaycare = false}
-	/>
-{/if}
-
 {#if showChildModal}
 	<ChildModal
 		child={editingChild}
@@ -1016,6 +1009,7 @@
 	<ShareChild
 		child={managingChild}
 		invitation={childInvitation}
+		loading={isLoadingInvitation}
 		onGenerateCode={handleGenerateInvitation}
 		onRevokeCode={handleRevokeInvitation}
 		onRemoveCollaborator={handleRemoveCollaborator}
@@ -1032,7 +1026,7 @@
 {/if}
 
 {#if showAdminModal}
-	<AdminModal onClose={() => showAdminModal = false} onImport={handleImportComplete} />
+	<AdminModal onClose={() => showAdminModal = false} onImport={handleImportComplete} onAddDaycare={handleAddDaycare} />
 {/if}
 {:else}
 	<LandingPage />
@@ -1219,10 +1213,6 @@
 	.btn {
 		border-radius: 10px;
 		padding: 0.625rem 1rem;
-	}
-
-	.btn-primary:hover {
-		transform: translateY(-1px);
 	}
 
 	.btn-secondary {

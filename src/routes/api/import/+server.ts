@@ -1,9 +1,24 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { bulkCreateDaycares } from '$lib/server/db';
+import { requireAuth } from '$lib/server/authorization';
+import { checkRateLimit, IMPORT_RATE_LIMIT } from '$lib/server/rate-limit';
 import type { DaycareInput } from '$lib/types';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async (event) => {
+	requireAuth(event);
+
+	// Rate limit: 10 imports per hour per IP
+	const rateLimitResult = checkRateLimit(event, IMPORT_RATE_LIMIT);
+	if (!rateLimitResult.allowed) {
+		throw error(429, {
+			message: 'Too many import requests. Please try again later.',
+			// @ts-expect-error - SvelteKit allows custom error properties
+			retryAfter: rateLimitResult.retryAfter
+		});
+	}
+
+	const { request } = event;
 	const formData = await request.formData();
 	const file = formData.get('file') as File;
 

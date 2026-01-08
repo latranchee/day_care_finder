@@ -1,14 +1,24 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import * as m from '$lib/paraglide/messages';
+	import AddressAutocomplete from '$lib/components/AddressAutocomplete.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	let { form } = $props();
+	let homeAddressValue = $state('');
 	let loading = $state(false);
-	let maxCommuteMinutes = $state(form?.maxCommuteMinutes ?? 5);
+	let maxCommuteMinutes = $state(5);
+
+	$effect(() => {
+		if (form) {
+			homeAddressValue = form.homeAddress ?? '';
+			maxCommuteMinutes = form.maxCommuteMinutes ?? 5;
+		}
+	});
 </script>
 
 <svelte:head>
-	<title>{m.signup_title()} - Daycare Finder</title>
+	<title>{m.signup_title()} - GarderieFacile.com</title>
 </svelte:head>
 
 <div class="auth-container">
@@ -83,13 +93,12 @@
 
 			<div class="form-group">
 				<label for="homeAddress">{m.settings_home_address()}</label>
-				<input
-					type="text"
+				<AddressAutocomplete
 					id="homeAddress"
-					name="homeAddress"
-					value={form?.homeAddress ?? ''}
+					bind:value={homeAddressValue}
 					placeholder={m.settings_home_address_placeholder()}
 				/>
+				<input type="hidden" name="homeAddress" value={homeAddressValue} />
 				<small class="hint">{m.signup_address_hint()}</small>
 			</div>
 
@@ -111,11 +120,18 @@
 
 			<button type="submit" class="btn btn-primary" disabled={loading}>
 				{#if loading}
+					<LoadingSpinner mode="inline" size="sm" showMessage={false} />
 					{m.signup_creating()}
 				{:else}
 					{m.signup_submit()}
 				{/if}
 			</button>
+
+			{#if loading}
+				<div class="loading-funny">
+					<LoadingSpinner mode="standalone" size="sm" showMessage={true} messageInterval={1500} />
+				</div>
+			{/if}
 		</form>
 
 		<p class="auth-link">
@@ -269,5 +285,14 @@
 
 	.auth-link a:hover {
 		text-decoration: underline;
+	}
+
+	.loading-funny {
+		margin-top: 1rem;
+		text-align: center;
+		padding: 0.75rem;
+		background: var(--background);
+		border-radius: 8px;
+		border: 1px solid var(--border-color);
 	}
 </style>

@@ -1,35 +1,31 @@
-import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getNotesByDaycareId, createNote } from '$lib/server/db';
-import { parseIdParam, requireDaycare, requireNonEmptyString } from '$lib/server/validation';
-import { getSession, SESSION_COOKIE_NAME } from '$lib/server/auth';
+import { parseIdParam, requireNonEmptyString } from '$lib/server/validation';
+import { success, created } from '$lib/server/api-utils';
+import { requireAuth, requireDaycareAccess } from '$lib/server/authorization';
 
-export const GET: RequestHandler = async ({ params }) => {
-	const daycareId = parseIdParam(params);
-	requireDaycare(daycareId);
+export const GET: RequestHandler = async (event) => {
+	const user = requireAuth(event);
+	const daycareId = parseIdParam(event.params);
+
+	// Verify user has access to this daycare's child
+	requireDaycareAccess(user.id, daycareId);
 
 	const notes = getNotesByDaycareId(daycareId);
-	return json(notes);
+	return success(notes);
 };
 
-export const POST: RequestHandler = async ({ params, request, cookies }) => {
-	const sessionId = cookies.get(SESSION_COOKIE_NAME);
-	if (!sessionId) {
-		throw error(401, 'Login required to add notes');
-	}
+export const POST: RequestHandler = async (event) => {
+	const user = requireAuth(event);
+	const daycareId = parseIdParam(event.params);
 
-	const user = getSession(sessionId);
-	if (!user) {
-		throw error(401, 'Login required to add notes');
-	}
+	// Verify user has access to this daycare's child
+	requireDaycareAccess(user.id, daycareId);
 
-	const daycareId = parseIdParam(params);
-	requireDaycare(daycareId);
-
-	const { content } = await request.json();
+	const { content } = await event.request.json();
 	const trimmedContent = requireNonEmptyString(content, 'Content');
 	const username = user.name || user.email;
 
 	const note = createNote(daycareId, trimmedContent, username);
-	return json(note, { status: 201 });
+	return created(note);
 };

@@ -30,6 +30,12 @@ export interface Daycare {
 	places_18_mois_plus: number | null;
 	description: string;
 	horaires: string;
+	// Bureau Coordonnateur (for Milieu familial)
+	bureau_coord_name: string;
+	parent_daycare_id: number | null;
+	// Additional portal fields
+	accessible: boolean;
+	inspection_url: string;
 	// Child association
 	child_id: number | null;
 }
@@ -126,6 +132,12 @@ export interface DaycareInput {
 	places_18_mois_plus?: number | null;
 	description?: string;
 	horaires?: string;
+	// Bureau Coordonnateur (for Milieu familial)
+	bureau_coord_name?: string;
+	parent_daycare_id?: number | null;
+	// Additional portal fields
+	accessible?: boolean;
+	inspection_url?: string;
 	// Child association
 	child_id?: number;
 }
@@ -191,4 +203,95 @@ export interface Invitation {
 	used_by_user_id: number | null;
 	used_at: string | null;
 	created_at: string;
+}
+
+// Comment types for public daycare discussions
+export interface Comment {
+	id: number;
+	daycare_id: number;
+	parent_id: number | null;
+	user_id: number;
+	content: string;
+	is_deleted: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface CommentInput {
+	content: string;
+	parent_id?: number | null;
+}
+
+export interface CommentWithDetails extends Comment {
+	author_name: string;
+	author_email: string;
+	vote_score: number;
+	upvote_count: number;
+	downvote_count: number;
+	user_vote: -1 | 0 | 1;
+	replies: CommentWithDetails[];
+}
+
+export interface CommentVote {
+	id: number;
+	comment_id: number;
+	user_id: number;
+	vote: -1 | 1;
+	created_at: string;
+}
+
+export interface VoteCounts {
+	vote_score: number;
+	upvote_count: number;
+	downvote_count: number;
+}
+
+// Canada Post AddressComplete API types
+export interface AddressSuggestion {
+	id: string;
+	text: string;
+	highlight: string;
+	description: string;
+	next: 'Find' | 'Retrieve';
+}
+
+export interface AddressDetails {
+	line1: string;
+	line2: string;
+	city: string;
+	province: string;
+	postalCode: string;
+	country: string;
+	formatted: string;
+}
+
+export interface AddressFindResponse {
+	suggestions: AddressSuggestion[];
+	error?: string;
+}
+
+export interface AddressRetrieveResponse {
+	address: AddressDetails | null;
+	error?: string;
+}
+
+// Admin view types
+export interface AdminUser {
+	id: number;
+	email: string;
+	name: string;
+	created_at: string;
+}
+
+export interface AdminChildDetails {
+	id: number;
+	name: string;
+	date_of_birth: string;
+	parents: { id: number; name: string; email: string; role: string }[];
+	daycare_counts: Record<Stage, number>;
+	total_daycares: number;
+}
+
+export interface AdminFamilyResponse {
+	users: (AdminUser & { children: AdminChildDetails[] })[];
 }

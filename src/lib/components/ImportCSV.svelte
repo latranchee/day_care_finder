@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Modal from './Modal.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import LoadingSpinner from './LoadingSpinner.svelte';
 
@@ -63,93 +64,63 @@
 	}
 </script>
 
-<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()} role="presentation">
-	<div class="import-modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
-		<button class="modal-close" onclick={onClose} aria-label={m.close()}>
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M18 6L6 18M6 6l12 12" />
+<Modal {onClose} title={m.modal_import()} size="md">
+	<p class="import-subtitle">{m.modal_import_subtitle()}</p>
+
+	<div
+		class="drop-zone"
+		class:drag-over={dragOver}
+		class:importing
+		ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+		ondragleave={() => dragOver = false}
+		ondrop={handleDrop}
+		onclick={() => fileInput.click()}
+		onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } }}
+		role="button"
+		tabindex="0"
+	>
+		<input
+			bind:this={fileInput}
+			type="file"
+			accept=".csv"
+			onchange={handleSelect}
+			hidden
+		/>
+
+		{#if importing}
+			<LoadingSpinner size="lg" />
+		{:else}
+			<svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+				<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+				<polyline points="17 8 12 3 7 8"/>
+				<line x1="12" y1="3" x2="12" y2="15"/>
 			</svg>
-		</button>
-
-		<h2 class="import-title">{m.modal_import()}</h2>
-		<p class="import-subtitle">{m.modal_import_subtitle()}</p>
-
-		<div
-			class="drop-zone"
-			class:drag-over={dragOver}
-			class:importing
-			ondragover={(e) => { e.preventDefault(); dragOver = true; }}
-			ondragleave={() => dragOver = false}
-			ondrop={handleDrop}
-			onclick={() => fileInput.click()}
-			onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } }}
-			role="button"
-			tabindex="0"
-		>
-			<input
-				bind:this={fileInput}
-				type="file"
-				accept=".csv"
-				onchange={handleSelect}
-				hidden
-			/>
-
-			{#if importing}
-				<LoadingSpinner size="lg" />
-			{:else}
-				<svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-					<polyline points="17 8 12 3 7 8"/>
-					<line x1="12" y1="3" x2="12" y2="15"/>
-				</svg>
-				<p class="drop-text">{m.import_drop_text()}</p>
-			{/if}
-		</div>
-
-		{#if error}
-			<p class="message error">{error}</p>
+			<p class="drop-text">{m.import_drop_text()}</p>
 		{/if}
+	</div>
 
-		{#if success}
-			<p class="message success">{success}</p>
-		{/if}
+	{#if error}
+		<p class="message error">{error}</p>
+	{/if}
 
-		<div class="format-info">
-			<h3>{m.import_format_title()}</h3>
-			<code class="format-example">
+	{#if success}
+		<p class="message success">{success}</p>
+	{/if}
+
+	<div class="format-info">
+		<h3>{m.import_format_title()}</h3>
+		<code class="format-example">
 name,address,phone,facebook,website,capacity,price,hours,age_range,rating
 Happy Kids,123 Main St,555-1234,https://facebook.com/happykids,https://example.com,50,$1200/mo,7am-6pm,6mo-5yr,4.5
-			</code>
-			<p class="format-note">{@html m.import_format_note()}</p>
-		</div>
+		</code>
+		<p class="format-note">{@html m.import_format_note()}</p>
 	</div>
-</div>
+</Modal>
 
 <style>
-	/* Base modal-backdrop, modal-close from shared.css */
-
-	.import-modal {
-		background: var(--modal-bg);
-		border-radius: 20px;
-		padding: 2rem;
-		width: 100%;
-		max-width: 520px;
-		position: relative;
-		box-shadow: 0 20px 40px rgba(45, 35, 25, 0.15);
-		animation: slideUp 0.3s ease-out;
-	}
-
-	.import-title {
-		font-family: 'Source Serif 4', Georgia, serif;
-		font-size: 1.5rem;
-		font-weight: 600;
-		color: var(--text-primary);
-		margin: 0 0 0.25rem 0;
-	}
-
 	.import-subtitle {
 		color: var(--text-secondary);
-		margin: 0 0 1.5rem 0;
+		margin: -1rem 0 1.5rem 0;
 		font-size: 0.95rem;
 	}
 

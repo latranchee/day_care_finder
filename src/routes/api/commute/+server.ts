@@ -1,6 +1,7 @@
 import type { RequestHandler } from './$types';
 import { getSetting, getDaycaresNeedingCommute, updateDaycareCommute } from '$lib/server/db';
-import { SERPAPI } from '$env/static/private';
+import { requireAuth } from '$lib/server/authorization';
+import { requireSerpApiKey } from '$lib/server/env';
 
 interface CommuteData {
 	minutes: number;
@@ -8,12 +9,13 @@ interface CommuteData {
 }
 
 async function calculateCommute(origin: string, destination: string): Promise<CommuteData | null> {
+	const apiKey = requireSerpApiKey();
 	const url = new URL('https://serpapi.com/search.json');
 	url.searchParams.set('engine', 'google_maps_directions');
 	url.searchParams.set('start_addr', origin);
 	url.searchParams.set('end_addr', destination);
 	url.searchParams.set('travel_mode', '0'); // 0 = driving
-	url.searchParams.set('api_key', SERPAPI);
+	url.searchParams.set('api_key', apiKey);
 
 	const response = await fetch(url.toString());
 
@@ -44,7 +46,8 @@ async function calculateCommute(origin: string, destination: string): Promise<Co
 	};
 }
 
-export const POST: RequestHandler = async () => {
+export const POST: RequestHandler = async (event) => {
+	requireAuth(event);
 	const homeAddress = getSetting('home_address');
 
 	if (!homeAddress) {

@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import * as m from '$lib/paraglide/messages';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	let { form } = $props();
 	let loading = $state(false);
 </script>
 
 <svelte:head>
-	<title>{m.login_title()} - Daycare Finder</title>
+	<title>{m.login_title()} - GarderieFacile.com</title>
 </svelte:head>
 
 <div class="auth-container">
@@ -49,15 +50,23 @@
 					required
 					autocomplete="current-password"
 				/>
+				<a href="/forgot-password" class="forgot-password-link">{m.login_forgot_password()}</a>
 			</div>
 
 			<button type="submit" class="btn btn-primary" disabled={loading}>
 				{#if loading}
+					<LoadingSpinner mode="inline" size="sm" showMessage={false} />
 					{m.login_logging_in()}
 				{:else}
 					{m.login_submit()}
 				{/if}
 			</button>
+
+			{#if loading}
+				<div class="loading-funny">
+					<LoadingSpinner mode="standalone" size="sm" showMessage={true} messageInterval={1500} />
+				</div>
+			{/if}
 		</form>
 
 		<p class="auth-link">
@@ -168,6 +177,27 @@
 	}
 
 	.auth-link a:hover {
+		text-decoration: underline;
+	}
+
+	.loading-funny {
+		margin-top: 1rem;
+		text-align: center;
+		padding: 0.75rem;
+		background: var(--background);
+		border-radius: 8px;
+		border: 1px solid var(--border-color);
+	}
+
+	.forgot-password-link {
+		display: block;
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+		color: var(--accent);
+		text-decoration: none;
+	}
+
+	.forgot-password-link:hover {
 		text-decoration: underline;
 	}
 </style>
