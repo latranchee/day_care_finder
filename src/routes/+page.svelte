@@ -1,11 +1,20 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, goto } from '$app/navigation';
 	import type { PageData } from './$types';
-	import type { Daycare, DaycareInput, Stage, DaycareWithExtras, CardSettings, FilterSettings } from '$lib/types';
+	import type { Daycare, DaycareInput, Stage, DaycareWithExtras, CardSettings, FilterSettings, ChildWithDetails, ChildInput, Invitation } from '$lib/types';
+	import { STAGE_IDS } from '$lib/types';
+	import { DEFAULT_CARD_SETTINGS, DEFAULT_FILTER_SETTINGS, STAGE_LABELS } from '$lib/constants';
 	import KanbanColumn from '$lib/components/KanbanColumn.svelte';
 	import DaycareModal from '$lib/components/DaycareModal.svelte';
-	import ImportCSV from '$lib/components/ImportCSV.svelte';
 	import AddDaycare from '$lib/components/AddDaycare.svelte';
+	import LandingPage from '$lib/components/LandingPage.svelte';
+	import ChildSelector from '$lib/components/ChildSelector.svelte';
+	import ChildModal from '$lib/components/ChildModal.svelte';
+	import ShareChild from '$lib/components/ShareChild.svelte';
+	import MigrationModal from '$lib/components/MigrationModal.svelte';
+	import AddressAutocomplete from '$lib/components/AddressAutocomplete.svelte';
+	import AdminModal from '$lib/components/AdminModal.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { getLocale, setLocale, locales } from '$lib/paraglide/runtime.js';
 
@@ -15,15 +24,7 @@
 
 	// Get translated stage label
 	function getStageLabel(stageId: Stage): string {
-		const labels: Record<Stage, () => string> = {
-			to_research: m.stage_to_research,
-			to_contact: m.stage_to_contact,
-			contacted: m.stage_contacted,
-			visited: m.stage_visited,
-			waitlisted: m.stage_waitlisted,
-			decision_made: m.stage_decision_made
-		};
-		return labels[stageId]();
+		return STAGE_LABELS[stageId]();
 	}
 
 
@@ -41,70 +42,63 @@
 		}))
 	);
 
-	let columns = $state<Record<Stage, DaycareWithExtras[]>>(structuredClone(data.columns));
+	// Initialize columns with empty arrays for each stage (for SSR), then sync from data via $effect
+	const emptyColumns = Object.fromEntries(
+		STAGE_IDS.map(stage => [stage, [] as DaycareWithExtras[]])
+	) as Record<Stage, DaycareWithExtras[]>;
+	let columns = $state<Record<Stage, DaycareWithExtras[]>>(emptyColumns);
 	let selectedDaycare = $state<Daycare | null>(null);
-	let showImport = $state(false);
 	let showAddDaycare = $state(false);
 	let showHidden = $state(false);
 	let showSettings = $state(false);
-	let settingsContainer: HTMLDivElement;
+	let settingsContainer = $state<HTMLDivElement | null>(null);
 	let saveError = $state<string | null>(null);
 	let homeAddress = $state('');
 	let isCalculatingCommutes = $state(false);
 	let commuteStatus = $state<string | null>(null);
 
-	// Filter settings - load from localStorage
-	const defaultFilterSettings: FilterSettings = {
-		maxCommuteMinutes: null,
-		requireReviews: false,
-		subsidizedOnly: false,
-		minRating: null,
-		requirePhone: false,
-		requireEmail: false,
-		requireWebsite: false,
-		requireFacebook: false
-	};
+	// Child management state
+	let showChildModal = $state(false);
+	let editingChild = $state<ChildWithDetails | null>(null);
+	let showShareChild = $state(false);
+	let managingChild = $state<ChildWithDetails | null>(null);
+	let childInvitation = $state<Invitation | null>(null);
 
+	// Search state
+	let searchQuery = $state('');
+
+	// Admin state
+	let showAdminModal = $state(false);
+	const isAdmin = $derived(data.user?.email === 'ol@latranchee.com');
+
+	// Filter settings - load from localStorage
 	function loadFilterSettings(): FilterSettings {
-		if (typeof window === 'undefined') return defaultFilterSettings;
+		if (typeof window === 'undefined') return DEFAULT_FILTER_SETTINGS;
 		const saved = localStorage.getItem('filterSettings');
 		if (saved) {
 			try {
-				return { ...defaultFilterSettings, ...JSON.parse(saved) };
+				return { ...DEFAULT_FILTER_SETTINGS, ...JSON.parse(saved) };
 			} catch {
-				return defaultFilterSettings;
+				return DEFAULT_FILTER_SETTINGS;
 			}
 		}
-		return defaultFilterSettings;
+		return DEFAULT_FILTER_SETTINGS;
 	}
 
 	let filterSettings = $state<FilterSettings>(loadFilterSettings());
 
 	// Card display settings - load from localStorage
-	const defaultCardSettings: CardSettings = {
-		showAddress: true,
-		showPhone: true,
-		showEmail: true,
-		showPrice: true,
-		showAgeRange: true,
-		showFacebook: true,
-		showContacts: true,
-		showReview: true,
-		showCommuteTime: true,
-		showSubsidized: true
-	};
-
 	function loadCardSettings() {
-		if (typeof window === 'undefined') return defaultCardSettings;
+		if (typeof window === 'undefined') return DEFAULT_CARD_SETTINGS;
 		const saved = localStorage.getItem('cardSettings');
 		if (saved) {
 			try {
-				return { ...defaultCardSettings, ...JSON.parse(saved) };
+				return { ...DEFAULT_CARD_SETTINGS, ...JSON.parse(saved) };
 			} catch {
-				return defaultCardSettings;
+				return DEFAULT_CARD_SETTINGS;
 			}
 		}
-		return defaultCardSettings;
+		return DEFAULT_CARD_SETTINGS;
 	}
 
 	let cardSettings = $state(loadCardSettings());
@@ -170,11 +164,11 @@
 	});
 
 	function clearAllFilters() {
-		filterSettings = { ...defaultFilterSettings };
+		filterSettings = { ...DEFAULT_FILTER_SETTINGS };
 	}
 
-	// Only sync from server on initial load or explicit refresh (not after every change)
-	let lastDataVersion = $state(JSON.stringify(data.columns));
+	// Sync columns from server data when it changes
+	let lastDataVersion = $state('');
 	$effect(() => {
 		const currentVersion = JSON.stringify(data.columns);
 		if (currentVersion !== lastDataVersion) {
@@ -255,10 +249,16 @@
 
 	async function handleAddDaycare(input: DaycareInput) {
 		try {
+			// Include child_id in the request
+			const daycareInput = {
+				...input,
+				child_id: data.selectedChildId
+			};
+
 			const res = await fetch('/api/daycares', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(input)
+				body: JSON.stringify(daycareInput)
 			});
 
 			if (res.ok) {
@@ -320,6 +320,16 @@
 			// Filter by hidden status
 			if (!showHidden && d.hidden) return false;
 
+			// Filter by search query (loose match on name, address, phone, email)
+			if (searchQuery.trim()) {
+				const query = searchQuery.toLowerCase().trim();
+				const nameMatch = d.name?.toLowerCase().includes(query);
+				const addressMatch = d.address?.toLowerCase().includes(query);
+				const phoneMatch = d.phone?.toLowerCase().includes(query);
+				const emailMatch = d.email?.toLowerCase().includes(query);
+				if (!nameMatch && !addressMatch && !phoneMatch && !emailMatch) return false;
+			}
+
 			// Filter by max commute time (also hide those without commute time computed)
 			if (filterSettings.maxCommuteMinutes !== null) {
 				if (d.commute_minutes === null || d.commute_minutes > filterSettings.maxCommuteMinutes) return false;
@@ -346,6 +356,158 @@
 
 	function handleReviewsChange() {
 		invalidateAll();
+	}
+
+	// Child management handlers
+	function handleSelectChild(childId: number) {
+		goto(`?child=${childId}`, { replaceState: true });
+	}
+
+	function handleAddChild() {
+		editingChild = null;
+		showChildModal = true;
+	}
+
+	async function handleManageChild(child: ChildWithDetails) {
+		managingChild = child;
+		// Load invitation for this child
+		try {
+			const res = await fetch(`/api/children/${child.id}/invitation`);
+			if (res.ok) {
+				childInvitation = await res.json();
+			} else {
+				childInvitation = null;
+			}
+		} catch {
+			childInvitation = null;
+		}
+		showShareChild = true;
+	}
+
+	async function handleSaveChild(input: ChildInput) {
+		try {
+			if (editingChild) {
+				// Update existing child
+				const res = await fetch(`/api/children/${editingChild.id}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(input)
+				});
+				if (res.ok) {
+					showChildModal = false;
+					editingChild = null;
+					invalidateAll();
+				}
+			} else {
+				// Create new child
+				const res = await fetch('/api/children', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(input)
+				});
+				if (res.ok) {
+					const newChild = await res.json();
+					showChildModal = false;
+					// Navigate to the new child
+					goto(`?child=${newChild.id}`, { replaceState: true });
+				}
+			}
+		} catch (err) {
+			console.error('Failed to save child:', err);
+		}
+	}
+
+	async function handleDeleteChild(childId: number) {
+		try {
+			const res = await fetch(`/api/children/${childId}`, { method: 'DELETE' });
+			if (res.ok) {
+				showChildModal = false;
+				editingChild = null;
+				// Navigate to first remaining child or clear selection
+				invalidateAll();
+				goto('/', { replaceState: true });
+			}
+		} catch (err) {
+			console.error('Failed to delete child:', err);
+		}
+	}
+
+	function handleEditChild() {
+		if (managingChild) {
+			editingChild = managingChild;
+			showShareChild = false;
+			showChildModal = true;
+		}
+	}
+
+	async function handleGenerateInvitation() {
+		if (!managingChild) return;
+		try {
+			const res = await fetch(`/api/children/${managingChild.id}/invitation`, {
+				method: 'POST'
+			});
+			if (res.ok) {
+				childInvitation = await res.json();
+			}
+		} catch (err) {
+			console.error('Failed to generate invitation:', err);
+		}
+	}
+
+	async function handleRevokeInvitation() {
+		if (!managingChild) return;
+		try {
+			const res = await fetch(`/api/children/${managingChild.id}/invitation`, {
+				method: 'DELETE'
+			});
+			if (res.ok) {
+				childInvitation = null;
+			}
+		} catch (err) {
+			console.error('Failed to revoke invitation:', err);
+		}
+	}
+
+	async function handleRemoveCollaborator(userId: number) {
+		if (!managingChild) return;
+		try {
+			const res = await fetch(`/api/children/${managingChild.id}/collaborators/${userId}`, {
+				method: 'DELETE'
+			});
+			if (res.ok) {
+				// Refresh the managing child data
+				const childRes = await fetch(`/api/children/${managingChild.id}`);
+				if (childRes.ok) {
+					managingChild = await childRes.json();
+				}
+				invalidateAll();
+			}
+		} catch (err) {
+			console.error('Failed to remove collaborator:', err);
+		}
+	}
+
+	// Migration handler - creates a child and migrates unassigned daycares
+	async function handleMigration(input: ChildInput) {
+		try {
+			// Create the child
+			const res = await fetch('/api/children', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+			if (res.ok) {
+				const newChild = await res.json();
+				// Migrate daycares to this child
+				await fetch(`/api/children/${newChild.id}/migrate`, {
+					method: 'POST'
+				});
+				// Navigate to the new child
+				goto(`?child=${newChild.id}`, { replaceState: true });
+			}
+		} catch (err) {
+			console.error('Failed to migrate:', err);
+		}
 	}
 
 	// Load home address from server settings on mount
@@ -465,6 +627,7 @@
 	<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet" />
 </svelte:head>
 
+{#if data.user}
 <div class="app">
 	{#if saveError}
 		<div class="error-toast">{saveError}</div>
@@ -477,9 +640,40 @@
 				{m.app_title()}
 			</h1>
 			<span class="daycare-count">{m.daycares_count({ count: totalDaycares })}</span>
+			<div class="search-container">
+				<svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="11" cy="11" r="8"/>
+					<path d="m21 21-4.35-4.35"/>
+				</svg>
+				<input
+					type="text"
+					class="search-input"
+					placeholder={m.search_placeholder()}
+					bind:value={searchQuery}
+				/>
+				{#if searchQuery}
+					<button
+						class="search-clear"
+						onclick={() => searchQuery = ''}
+						title={m.search_clear()}
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<line x1="18" y1="6" x2="6" y2="18"/>
+							<line x1="6" y1="6" x2="18" y2="18"/>
+						</svg>
+					</button>
+				{/if}
+			</div>
 		</div>
 
 		<div class="header-actions">
+			<ChildSelector
+				children={data.children}
+				selectedChildId={data.selectedChildId}
+				onSelect={handleSelectChild}
+				onAddChild={handleAddChild}
+				onManageChild={handleManageChild}
+			/>
 			{#if hiddenCount > 0}
 				<button
 					class="btn btn-secondary"
@@ -496,6 +690,17 @@
 						{/if}
 					</svg>
 					{showHidden ? m.btn_hide_hidden() : m.btn_show_hidden({ count: hiddenCount })}
+				</button>
+			{/if}
+			{#if isAdmin}
+				<button
+					class="btn btn-secondary"
+					onclick={() => showAdminModal = true}
+				>
+					<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+					</svg>
+					{m.admin_btn()}
 				</button>
 			{/if}
 			<div class="settings-container" bind:this={settingsContainer}>
@@ -566,7 +771,7 @@
 									{#if filteredOutCount() > 0}
 										<span class="filter-badge filter-badge-hidden">{m.filter_hidden_count({ count: filteredOutCount() })}</span>
 									{/if}
-									<button class="clear-all-btn" onclick={clearAllFilters}>
+									<button class="btn-clear-link" onclick={clearAllFilters}>
 										{m.filter_clear_all()}
 									</button>
 								{/if}
@@ -610,7 +815,7 @@
 									</div>
 									<div class="rating-selector">
 										<button
-											class="rating-btn"
+											class="btn-rating"
 											class:active={filterSettings.minRating === null}
 											onclick={() => filterSettings.minRating = null}
 										>
@@ -618,7 +823,7 @@
 										</button>
 										{#each [2, 3, 4] as rating}
 											<button
-												class="rating-btn"
+												class="btn-rating"
 												class:active={filterSettings.minRating === rating}
 												onclick={() => filterSettings.minRating = rating}
 											>
@@ -700,23 +905,20 @@
 							<div class="settings-header">{m.settings_commute()}</div>
 							<div class="settings-field">
 								<label for="home-address">{m.settings_home_address()}</label>
-								<input
-									type="text"
+								<AddressAutocomplete
 									id="home-address"
 									bind:value={homeAddress}
-									onblur={saveHomeAddress}
 									placeholder={m.settings_home_address_placeholder()}
+									onSelect={() => saveHomeAddress()}
 								/>
 							</div>
 							<button
-								class="settings-btn"
+								class="btn-settings"
 								onclick={calculateCommutes}
 								disabled={isCalculatingCommutes}
 							>
 								{#if isCalculatingCommutes}
-									<svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/>
-									</svg>
+									<LoadingSpinner mode="inline" size="sm" showMessage={false} />
 									{m.settings_calculating()}
 								{:else}
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -736,7 +938,7 @@
 							<div class="language-toggle">
 								{#each locales as locale}
 									<button
-										class="lang-btn"
+										class="btn-lang"
 										class:active={getLocale() === locale}
 										onclick={() => switchLanguage(locale)}
 									>
@@ -748,14 +950,6 @@
 					</div>
 				{/if}
 			</div>
-			<button class="btn btn-secondary" onclick={() => showImport = true}>
-				<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-					<polyline points="17 8 12 3 7 8"/>
-					<line x1="12" y1="3" x2="12" y2="15"/>
-				</svg>
-				{m.btn_import_csv()}
-			</button>
 			<button class="btn btn-primary" onclick={() => showAddDaycare = true}>
 				<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<line x1="12" y1="5" x2="12" y2="19"/>
@@ -766,7 +960,6 @@
 
 			<div class="auth-section">
 				{#if data.user}
-					<span class="user-info">{m.auth_welcome({ name: data.user.name || data.user.email })}</span>
 					<form action="/logout" method="POST" class="logout-form">
 						<button type="submit" class="btn btn-secondary btn-sm">
 							{m.auth_logout()}
@@ -803,18 +996,46 @@
 	user={data.user}
 />
 
-{#if showImport}
-	<ImportCSV
-		onImport={handleImportComplete}
-		onClose={() => showImport = false}
-	/>
-{/if}
-
 {#if showAddDaycare}
 	<AddDaycare
 		onAdd={handleAddDaycare}
 		onClose={() => showAddDaycare = false}
 	/>
+{/if}
+
+{#if showChildModal}
+	<ChildModal
+		child={editingChild}
+		onSave={handleSaveChild}
+		onClose={() => { showChildModal = false; editingChild = null; }}
+		onDelete={handleDeleteChild}
+	/>
+{/if}
+
+{#if showShareChild && managingChild}
+	<ShareChild
+		child={managingChild}
+		invitation={childInvitation}
+		onGenerateCode={handleGenerateInvitation}
+		onRevokeCode={handleRevokeInvitation}
+		onRemoveCollaborator={handleRemoveCollaborator}
+		onEditChild={handleEditChild}
+		onClose={() => { showShareChild = false; managingChild = null; }}
+	/>
+{/if}
+
+{#if data.hasUnassignedDaycares && data.children.length === 0}
+	<MigrationModal
+		unassignedCount={data.unassignedDaycareCount}
+		onMigrate={handleMigration}
+	/>
+{/if}
+
+{#if showAdminModal}
+	<AdminModal onClose={() => showAdminModal = false} onImport={handleImportComplete} />
+{/if}
+{:else}
+	<LandingPage />
 {/if}
 
 <style>
@@ -905,6 +1126,69 @@
 		font-weight: 500;
 	}
 
+	.search-container {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+
+	.search-icon {
+		position: absolute;
+		left: 0.75rem;
+		width: 16px;
+		height: 16px;
+		color: #a09485;
+		pointer-events: none;
+	}
+
+	.search-input {
+		padding: 0.5rem 2rem 0.5rem 2.25rem;
+		border: 1px solid #e8dfd3;
+		border-radius: 999px;
+		font-size: 0.875rem;
+		background: #fafafa;
+		width: 200px;
+		transition: all 0.2s ease;
+	}
+
+	.search-input:focus {
+		outline: none;
+		border-color: #c47a4e;
+		background: white;
+		width: 260px;
+		box-shadow: 0 0 0 3px rgba(196, 122, 78, 0.1);
+	}
+
+	.search-input::placeholder {
+		color: #a09485;
+	}
+
+	.search-clear {
+		position: absolute;
+		right: 0.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: none;
+		background: #e8dfd3;
+		border-radius: 50%;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.search-clear:hover {
+		background: #d8cfc4;
+	}
+
+	.search-clear svg {
+		width: 12px;
+		height: 12px;
+		color: #5a4d3d;
+	}
+
 	.header-actions {
 		display: flex;
 		gap: 0.75rem;
@@ -918,12 +1202,6 @@
 		margin-left: 0.5rem;
 		padding-left: 0.75rem;
 		border-left: 1px solid var(--border-color);
-	}
-
-	.user-info {
-		font-size: 0.85rem;
-		color: var(--text-secondary);
-		white-space: nowrap;
 	}
 
 	.logout-form {
@@ -951,27 +1229,7 @@
 		color: #5a4d3d;
 	}
 
-	.btn-icon-only {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.625rem;
-		border: none;
-		border-radius: 10px;
-		background: #f0ebe4;
-		color: #5a4d3d;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.btn-icon-only:hover {
-		background: #e8e2d9;
-	}
-
-	.btn-icon-only.active {
-		background: #d8cfc4;
-		color: #3d3425;
-	}
+	/* btn-icon-only now in shared.css */
 
 	.settings-container {
 		position: relative;
@@ -1057,60 +1315,7 @@
 		margin-bottom: 0.375rem;
 	}
 
-	.settings-field input[type="text"] {
-		width: 100%;
-		padding: 0.625rem 0.75rem;
-		border: 1px solid #e8dfd3;
-		border-radius: 8px;
-		font-size: 0.875rem;
-		background: #fafafa;
-	}
-
-	.settings-field input[type="text"]:focus {
-		outline: none;
-		border-color: #c47a4e;
-		background: white;
-	}
-
-	.settings-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.625rem;
-		background: #c47a4e;
-		color: white;
-		border: none;
-		border-radius: 8px;
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background 0.15s ease;
-	}
-
-	.settings-btn:hover:not(:disabled) {
-		background: #b36a42;
-	}
-
-	.settings-btn:disabled {
-		background: #d8cfc4;
-		cursor: not-allowed;
-	}
-
-	.settings-btn svg {
-		width: 16px;
-		height: 16px;
-	}
-
-	.settings-btn .spinner {
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		from { transform: rotate(0deg); }
-		to { transform: rotate(360deg); }
-	}
+	/* btn-settings now in shared.css */
 
 	.commute-status {
 		font-size: 0.75rem;
@@ -1146,20 +1351,7 @@
 		background: #7a6d5c;
 	}
 
-	.clear-all-btn {
-		margin-left: auto;
-		font-size: 0.7rem;
-		color: #c47a4e;
-		background: none;
-		border: none;
-		cursor: pointer;
-		text-decoration: underline;
-		padding: 0;
-	}
-
-	.clear-all-btn:hover {
-		color: #a35f3a;
-	}
+	/* btn-clear-link now in shared.css */
 
 	.filter-grid {
 		display: flex;
@@ -1249,27 +1441,7 @@
 		gap: 0.5rem;
 	}
 
-	.rating-btn {
-		flex: 1;
-		padding: 0.5rem 0.75rem;
-		font-size: 0.8rem;
-		font-weight: 500;
-		color: #7a6d5c;
-		background: #f5f1eb;
-		border: 1px solid transparent;
-		border-radius: 6px;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.rating-btn:hover {
-		background: #ebe5db;
-	}
-
-	.rating-btn.active {
-		background: #c47a4e;
-		color: white;
-	}
+	/* btn-rating now in shared.css */
 
 	.filter-toggles {
 		display: grid;
@@ -1342,28 +1514,7 @@
 		padding: 0.5rem 1rem 0.75rem;
 	}
 
-	.lang-btn {
-		flex: 1;
-		padding: 0.5rem;
-		border: 1px solid #e8dfd3;
-		border-radius: 6px;
-		background: white;
-		color: #5a4d3d;
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.lang-btn:hover {
-		border-color: #c47a4e;
-	}
-
-	.lang-btn.active {
-		background: #c47a4e;
-		border-color: #c47a4e;
-		color: white;
-	}
+	/* btn-lang now in shared.css */
 
 	.kanban-board {
 		display: flex;
