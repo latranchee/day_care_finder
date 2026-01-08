@@ -47,6 +47,13 @@ try {
 	// Column already exists, ignore error
 }
 
+// Migration: Add email column if it doesn't exist
+try {
+	db.exec(`ALTER TABLE daycares ADD COLUMN email TEXT DEFAULT ''`);
+} catch {
+	// Column already exists, ignore error
+}
+
 // Daycare CRUD operations
 export function getAllDaycares(): Daycare[] {
 	return db.prepare('SELECT * FROM daycares ORDER BY stage, position').all() as Daycare[];
@@ -70,13 +77,14 @@ export function createDaycare(input: DaycareInput): Daycare {
 
 	const result = db
 		.prepare(
-			`INSERT INTO daycares (name, address, phone, website, capacity, price, hours, age_range, rating, stage, position)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO daycares (name, address, phone, email, website, capacity, price, hours, age_range, rating, stage, position)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			input.name,
 			input.address || '',
 			input.phone || '',
+			input.email || '',
 			input.website || '',
 			input.capacity ?? null,
 			input.price || '',

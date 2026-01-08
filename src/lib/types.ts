@@ -3,6 +3,7 @@ export interface Daycare {
 	name: string;
 	address: string;
 	phone: string;
+	email: string;
 	website: string;
 	capacity: number | null;
 	price: string;
@@ -44,6 +45,7 @@ export interface DaycareInput {
 	name: string;
 	address?: string;
 	phone?: string;
+	email?: string;
 	website?: string;
 	capacity?: number | null;
 	price?: string;

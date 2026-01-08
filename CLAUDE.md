@@ -54,3 +54,23 @@ This is a **SvelteKit 2 + Svelte 5** application for tracking daycare options th
 - `POST/DELETE /api/daycares/[id]/notes` - Notes for a daycare
 - `DELETE /api/notes/[id]` - Delete a note
 - `POST /api/import` - Bulk CSV import
+
+## Important: UTF-8 Encoding
+
+This app contains French Canadian text with accented characters (é, è, ê, à, ç, etc.). **Always ensure proper UTF-8 handling:**
+
+### When web scraping/crawling:
+- Ensure responses are decoded as UTF-8
+- Check the page's `Content-Type` header or `<meta charset>` tag
+- If using fetch, the response should be read with proper encoding
+
+### When importing data:
+- CSV files should be UTF-8 encoded
+- Verify accented characters display correctly before saving to database
+
+### When adding notes or content:
+- Never store text with `�` (replacement characters) - this indicates encoding corruption
+- If you see mojibake (e.g., `Ã©` instead of `é`), fix the encoding at the source
+
+### Testing:
+- Verify French text like "Siège social", "Développement", "sécurisant" displays correctly
