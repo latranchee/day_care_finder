@@ -27,3 +27,6 @@ vite.config.ts.timestamp-*
 
 # Playwright MCP
 .playwright-mcp/
+
+# Trash
+.trash/
