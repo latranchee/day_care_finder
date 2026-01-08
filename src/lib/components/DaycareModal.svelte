@@ -192,6 +192,31 @@
 								</div>
 							{/if}
 
+							<!-- Type and subsidized badges -->
+							{#if daycare.daycare_type || daycare.subventionne}
+								<div class="type-badges">
+									{#if daycare.daycare_type}
+										<span class="badge badge-type">
+											{daycare.daycare_type === 'CPE' ? m.daycare_type_cpe() :
+											 daycare.daycare_type === 'Garderie' ? m.daycare_type_garderie() :
+											 daycare.daycare_type === 'Milieu familial' ? m.daycare_type_milieu() :
+											 daycare.daycare_type}
+										</span>
+									{/if}
+									{#if daycare.subventionne}
+										<span class="badge badge-subsidized">{m.subsidized_yes()}</span>
+									{/if}
+								</div>
+							{/if}
+
+							<!-- Description section -->
+							{#if daycare.description}
+								<div class="description-section">
+									<span class="info-label">{m.label_description()}</span>
+									<p class="description-text">{daycare.description}</p>
+								</div>
+							{/if}
+
 							<div class="info-grid">
 								{#if daycare.address}
 									<div class="info-item wide">
@@ -217,7 +242,17 @@
 								{#if daycare.capacity}
 									<div class="info-item">
 										<span class="info-label">{m.label_capacity()}</span>
-										<span class="info-value">{m.capacity_children({ count: daycare.capacity })}</span>
+										<span class="info-value">
+											{m.capacity_children({ count: daycare.capacity })}
+											{#if daycare.places_poupons !== null || daycare.places_18_mois_plus !== null}
+												<span class="places-breakdown">
+													({m.places_breakdown({
+														poupons: daycare.places_poupons ?? 0,
+														older: daycare.places_18_mois_plus ?? 0
+													})})
+												</span>
+											{/if}
+										</span>
 									</div>
 								{/if}
 
@@ -245,6 +280,13 @@
 												{daycare.commute_minutes} min
 											{/if}
 										</span>
+									</div>
+								{/if}
+
+								{#if daycare.bureau_coord_name}
+									<div class="info-item wide">
+										<span class="info-label">{m.label_bureau_coord()}</span>
+										<span class="info-value bureau-coord">{daycare.bureau_coord_name}</span>
 									</div>
 								{/if}
 							</div>
@@ -352,6 +394,56 @@
 		margin-left: 0.5rem;
 		font-size: 0.875rem;
 		color: var(--text-secondary);
+	}
+
+	.type-badges {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.25rem 0.75rem;
+		border-radius: 9999px;
+		font-size: 0.75rem;
+		font-weight: 500;
+	}
+
+	.badge-type {
+		background: #e8f4f8;
+		color: #0369a1;
+	}
+
+	.badge-subsidized {
+		background: #d1fae5;
+		color: #065f46;
+	}
+
+	.description-section {
+		margin-bottom: 1.5rem;
+		padding: 1rem;
+		background: #faf8f5;
+		border-radius: 8px;
+		border-left: 3px solid var(--accent);
+	}
+
+	.description-text {
+		margin: 0.5rem 0 0 0;
+		font-size: 0.9rem;
+		line-height: 1.6;
+		color: var(--text-primary);
+	}
+
+	.places-breakdown {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+	}
+
+	.bureau-coord {
+		color: #6a4a7a;
+		font-style: italic;
 	}
 
 	.quick-links {

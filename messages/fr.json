@@ -216,6 +216,17 @@
   "subsidized_yes": "Subventionné",
   "subsidized_no": "Non subventionné",
 
+  "label_description": "Description",
+  "label_daycare_type": "Type",
+  "label_places_poupons": "Places poupons",
+  "label_places_18_mois": "Places 18 mois+",
+  "label_bureau_coord": "Bureau coordonnateur",
+  "label_horaires": "Horaires",
+  "daycare_type_cpe": "CPE",
+  "daycare_type_garderie": "Garderie",
+  "daycare_type_milieu": "Milieu familial",
+  "places_breakdown": "{poupons} poupons, {older} 18 mois+",
+
   "landing_headline": "Trouvez la garderie parfaite pour votre famille",
   "landing_subtitle": "Suivez, comparez et organisez votre recherche de garderie avec notre tableau Kanban simple. Conservez notes, contacts et avis au même endroit.",
   "landing_feature_kanban_title": "Suivi visuel",

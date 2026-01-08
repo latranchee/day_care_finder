@@ -216,6 +216,17 @@
   "subsidized_yes": "Subsidized",
   "subsidized_no": "Not subsidized",
 
+  "label_description": "Description",
+  "label_daycare_type": "Type",
+  "label_places_poupons": "Infant spots",
+  "label_places_18_mois": "18mo+ spots",
+  "label_bureau_coord": "Coordination Office",
+  "label_horaires": "Schedule",
+  "daycare_type_cpe": "CPE",
+  "daycare_type_garderie": "Private Daycare",
+  "daycare_type_milieu": "Home Daycare",
+  "places_breakdown": "{poupons} infant, {older} 18mo+",
+
   "landing_headline": "Find the Perfect Daycare for Your Family",
   "landing_subtitle": "Track, compare, and organize your daycare search with our simple Kanban-style board. Keep notes, contacts, and reviews all in one place.",
   "landing_feature_kanban_title": "Visual Tracking",
